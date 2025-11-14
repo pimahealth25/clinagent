@@ -1,0 +1,102 @@
+body {
+  font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f7f7f8;
+}
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+h1 {
+  font-size: 20px;
+  margin: 12px 0 16px;
+}
+#chat {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  height: 72vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.msg {
+  margin: 12px 0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.msg.user {
+  color: #111827;
+}
+.msg.bot {
+  color: #374151;
+}
+.msg .label {
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.msg .content {
+  white-space: pre-wrap;
+  display: block;
+  margin-top: 2px;
+}
+.user .label {
+  background: #eef2ff;
+  color: #1e3a8a;
+  border: 1px solid #e0e7ff;
+}
+.bot .label {
+  background: #ecfeff;
+  color: #0c4a6e;
+  border: 1px solid #cffafe;
+}
+.user .content {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.bot .content {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 56px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+button {
+  background: #111827;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+button.secondary {
+  background: #4b5563;
+}
+.help {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 8px;
+}

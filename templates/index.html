@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clinical Trials Chat</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/main.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Clinical Trials Chat</h1>
+      <div id="chat"></div>
+      <div id="status" class="help"></div>
+      <div class="row">
+        <textarea
+          id="input"
+          placeholder="Type a query (e.g., phase 3 diabetes) or 'help'"
+        ></textarea>
+      </div>
+      <div class="row" style="align-items: center; flex-wrap: wrap">
+        <button id="send">Send</button>
+        <button class="secondary" id="show">Show</button>
+        <button class="secondary" id="clear">Clear Filters</button>
+        <label
+          style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #374151;
+          "
+        >
+          <input type="checkbox" id="agent" /> Use Agents
+        </label>
+      </div>
+      <div class="help">
+        Commands: help • refine &lt;query&gt; • filter phase=&lt;v&gt; |
+        status=&lt;v&gt; | condition=&lt;v&gt; • more • clear • show
+      </div>
+    </div>
+
+    <script>
+      const chat = document.getElementById("chat");
+      const input = document.getElementById("input");
+      const btnSend = document.getElementById("send");
+      const btnShow = document.getElementById("show");
+      const btnClear = document.getElementById("clear");
+      const chkAgent = document.getElementById("agent");
+      const statusDiv = document.getElementById("status");
+
+      let state = { query: "", page_size: 5, filters: {}, agent: false };
+
+      function append(role, text) {
+        const div = document.createElement("div");
+        div.className = "msg " + (role === "user" ? "user" : "bot");
+
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = role === "user" ? "You" : "Agent";
+
+        const content = document.createElement("span");
+        content.className = "content";
+        content.textContent = " " + text;
+
+        div.appendChild(label);
+        div.appendChild(content);
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      function setStatus(s) {
+        const filters = s?.filters || {};
+        const pieces = [];
+
+        if (s?.query) pieces.push(`query: "${s.query}"`);
+        const phase = filters.phase ? `phase=${filters.phase}` : "";
+        const st = filters.status ? `status=${filters.status}` : "";
+        const cond = filters.condition ? `condition=${filters.condition}` : "";
+        const sort = filters.sort ? `sort=${filters.sort}` : "";
+        const limit = filters.limit ? `limit=${filters.limit}` : "";
+
+        const fs = [phase, st, cond, sort, limit].filter(Boolean).join(" · ");
+        if (fs) pieces.push(fs);
+        if (s?.page_size) pieces.push(`pageSize=${s.page_size}`);
+        if (s?.refiner) pieces.push("refiner=on");
+        if (s?.agent) pieces.push("agent=on");
+        statusDiv.textContent = pieces.length
+          ? `State: ${pieces.join(" | ")}`
+          : "";
+      }
+
+      function updateShowLabel() {
+        const hasText = !!input.value.trim();
+        const hasQuery = !!(state?.query && state.query.trim());
+        btnShow.textContent = hasText || !hasQuery ? "Show" : "More";
+      }
+
+      chkAgent.checked = !!state.agent;
+      chkAgent.addEventListener("change", () => {
+        state.agent = chkAgent.checked;
+        setStatus(state);
+      });
+
+      async function sendMessage(message) {
+        append("user", message);
+        input.value = "";
+        try {
+          const res = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message, state }),
+          });
+          const data = await res.json();
+          state = data.state || state;
+          setStatus(state);
+          updateShowLabel();
+          append("bot", data.reply || "");
+        } catch (e) {
+          append("bot", "Error contacting server.");
+        }
+      }
+
+      async function sendCommand(message) {
+        try {
+          const res = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message, state }),
+          });
+          const data = await res.json();
+          state = data.state || state;
+          setStatus(state);
+          updateShowLabel();
+          append("bot", data.reply || "");
+        } catch (e) {
+          append("bot", "Error contacting server.");
+        }
+      }
+
+      async function sendShowForQuery(q) {
+        append("user", q);
+        input.value = "";
+        state.filters = { ...(state.filters || {}), limit: "10" };
+        await sendCommand("show " + q);
+      }
+
+      btnSend.addEventListener("click", () => {
+        const text = input.value.trim();
+        if (text) sendMessage(text);
+      });
+
+      input.addEventListener("input", updateShowLabel);
+
+      btnShow.addEventListener("click", () => {
+        const text = input.value.trim();
+        if (text) {
+          sendShowForQuery(text);
+          updateShowLabel();
+        } else {
+          const f = state.filters || {};
+          const current = parseInt(f.limit || "10", 10);
+          const next = Math.min(isNaN(current) ? 10 : current + 10, 100);
+          state.filters = { ...f, limit: String(next) };
+          const ps = parseInt(String(state.page_size || "5"), 10);
+          state.page_size = Math.min(Math.max(isNaN(ps) ? 5 : ps, next), 100);
+          sendCommand("show");
+        }
+      });
+
+      btnClear.addEventListener("click", () => sendMessage("clear"));
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          const text = input.value.trim();
+          if (text) sendMessage(text);
+        }
+      });
+
+      append(
+        "bot",
+        "Hi! Try 'phase 3 diabetes', '5 most recent lung cancer', or type 'help'."
+      );
+      updateShowLabel();
+    </script>
+  </body>
+</html>
