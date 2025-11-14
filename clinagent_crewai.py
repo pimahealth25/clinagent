@@ -21,6 +21,7 @@ except Exception:
     crewai_tool_alt = None
 
 load_dotenv()
+
 # Let both names work to match your current env
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
 if not OPENAI_API_KEY:
@@ -53,8 +54,10 @@ def _normalize_trials(data: Dict[str, Any]) -> List[Dict[str, str]]:
             or study.get("Condition")
             or []
         )
-        phase = ", ".join(phase_list) if isinstance(phase_list, list) else str(phase_list)
-        condition = ", ".join(conditions) if isinstance(conditions, list) else str(conditions)
+        phase = ", ".join(phase_list) if isinstance(
+            phase_list, list) else str(phase_list)
+        condition = ", ".join(conditions) if isinstance(
+            conditions, list) else str(conditions)
         trials.append({
             "title": title or "Untitled",
             "phase": phase or "N/A",
@@ -99,7 +102,6 @@ def make_search_tool():
         def wrapped_alt(term: str, page_size: int = 5) -> str:
             """Search ClinicalTrials.gov for a term. Args: term (str), page_size (int). Returns JSON string list of trials with title, phase, status, condition."""
             return _search_clinical_trials(term, page_size)
-
         return wrapped_alt
 
     if CrewBaseTool is not None:
@@ -110,7 +112,8 @@ def make_search_tool():
                 "[{title, phase, status, condition}]."
             )
 
-            def _run(self, term: str, page_size: int = 5) -> str:  # type: ignore[override]
+            # type: ignore[override]
+            def _run(self, term: str, page_size: int = 5) -> str:
                 return _search_clinical_trials(term, page_size)
 
         return SearchClinicalTrialsTool()
@@ -183,13 +186,18 @@ def build_crew(model: str = "gpt-4o-mini") -> Crew:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CrewAI clinical trials agent")
-    parser.add_argument("query", nargs="?", help="Search query, e.g. 'phase 3 diabetes trials'")
-    parser.add_argument("--page-size", type=int, default=5, help="Number of trials to fetch (default 5)")
-    parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI model to use (default gpt-4o-mini)")
+    parser = argparse.ArgumentParser(
+        description="CrewAI clinical trials agent")
+    parser.add_argument("query", nargs="?",
+                        help="Search query, e.g. 'phase 3 diabetes trials'")
+    parser.add_argument("--page-size", type=int, default=5,
+                        help="Number of trials to fetch (default 5)")
+    parser.add_argument("--model", default="gpt-4o-mini",
+                        help="OpenAI model to use (default gpt-4o-mini)")
     args = parser.parse_args()
 
-    q = args.query or input("Enter your goal (e.g., 'phase 3 diabetes trials'): ")
+    q = args.query or input(
+        "Enter your goal (e.g., 'phase 3 diabetes trials'): ")
     crew = build_crew(model=args.model)
 
     result = crew.kickoff(inputs={"query": q, "page_size": args.page_size})

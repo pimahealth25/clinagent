@@ -57,6 +57,7 @@ def refine_query(user_query: str, *, model: str = "gpt-4o-mini", temperature: fl
             from .clinicaltrials import extract_from_sentence  # type: ignore
         except Exception:
             return {"refined_query": user_query, "filters": {}}
+
         filters = extract_from_sentence(user_query)
         # refined query: remove phase/status words and keep core condition keywords
         refined = user_query
@@ -85,6 +86,7 @@ def refine_query(user_query: str, *, model: str = "gpt-4o-mini", temperature: fl
         ],
         temperature=temperature,
     )
+
     content = completion.choices[0].message.content.strip()
     try:
         data = json.loads(content)

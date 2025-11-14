@@ -32,12 +32,53 @@ def _coerce_date(value: Optional[str]) -> str:
     return value
 
 
+def simplify_term(term: str) -> str:
+    """Make a looser search term by removing phase/status words and generic fillers."""
+    low = term
+    low = re.sub(r"\bphase\s*[1-4]\b", " ", low, flags=re.I)
+    low = re.sub(r"\b(trial|trials|study|studies|patients|with)\b",
+                 " ", low, flags=re.I)
+
+    # remove common statuses
+    low = re.sub(r"\b(not yet recruiting|active,? not recruiting|recruiting|completed|terminated|suspended|enrolling by invitation)\b", " ", low, flags=re.I)
+
+    # collapse whitespace
+    low = re.sub(r"\s+", " ", low).strip()
+    return low or term
+
+
+def _expand_drug_synonyms(term: str) -> str:
+    """Append common brand/generic synonyms to improve recall (e.g., 'keytruda' -> also 'pembrolizumab')."""
+    synonyms = {
+        "keytruda": "pembrolizumab",
+        "opdivo": "nivolumab",
+        "imfinzi": "durvalumab",
+        "tecentriq": "atezolizumab",
+        "yervoy": "ipilimumab",
+        "herceptin": "trastuzumab",
+        "avastin": "bevacizumab",
+        "libtayo": "cemiplimab",
+        "jemperli": "dostarlimab",
+    }
+    low = term.lower()
+    extras: List[str] = []
+    for brand, generic in synonyms.items():
+        if brand in low and generic not in low:
+            extras.append(generic)
+        if generic in low and brand not in low:
+            extras.append(brand)
+    if extras:
+        return term + " " + " ".join(sorted(set(extras)))
+    return term
+
+
 def _attempt_fetch(term: str, page_size: int) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     params = {
         "query.term": term,
         "fields": "BriefTitle,Phase,Condition,OverallStatus",
         "pageSize": page_size,
     }
+
     try:
         resp = requests.get(API_URL, params=params, timeout=30)
         resp.raise_for_status()
@@ -45,7 +86,9 @@ def _attempt_fetch(term: str, page_size: int) -> Tuple[List[Dict[str, Any]], Dic
         raise RuntimeError(f"ClinicalTrials.gov request failed: {e}") from e
 
     data = resp.json() if getattr(resp, "content", None) else {}
+
     trials: List[Dict[str, Any]] = []
+
     for study in data.get("studies", []):
         ps = study.get("protocolSection", {}) or {}
         title = (
@@ -97,44 +140,6 @@ def _attempt_fetch(term: str, page_size: int) -> Tuple[List[Dict[str, Any]], Dic
             "last_update": last_upd,
         })
     return trials, data
-
-
-def simplify_term(term: str) -> str:
-    """Make a looser search term by removing phase/status words and generic fillers."""
-    low = term
-    low = re.sub(r"\bphase\s*[1-4]\b", " ", low, flags=re.I)
-    low = re.sub(r"\b(trial|trials|study|studies|patients|with)\b",
-                 " ", low, flags=re.I)
-    # remove common statuses
-    low = re.sub(r"\b(not yet recruiting|active,? not recruiting|recruiting|completed|terminated|suspended|enrolling by invitation)\b", " ", low, flags=re.I)
-    # collapse whitespace
-    low = re.sub(r"\s+", " ", low).strip()
-    return low or term
-
-
-def _expand_drug_synonyms(term: str) -> str:
-    """Append common brand/generic synonyms to improve recall (e.g., 'keytruda' -> also 'pembrolizumab')."""
-    synonyms = {
-        "keytruda": "pembrolizumab",
-        "opdivo": "nivolumab",
-        "imfinzi": "durvalumab",
-        "tecentriq": "atezolizumab",
-        "yervoy": "ipilimumab",
-        "herceptin": "trastuzumab",
-        "avastin": "bevacizumab",
-        "libtayo": "cemiplimab",
-        "jemperli": "dostarlimab",
-    }
-    low = term.lower()
-    extras: List[str] = []
-    for brand, generic in synonyms.items():
-        if brand in low and generic not in low:
-            extras.append(generic)
-        if generic in low and brand not in low:
-            extras.append(brand)
-    if extras:
-        return term + " " + " ".join(sorted(set(extras)))
-    return term
 
 
 def fetch_trials(term: str, page_size: int = 5) -> List[Dict[str, Any]]:

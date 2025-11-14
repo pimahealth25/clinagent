@@ -4,8 +4,6 @@ import sys
 import argparse
 from typing import List, Dict, Any, Optional
 
-import requests
-from requests.exceptions import RequestException
 from dotenv import load_dotenv
 from core.clinicaltrials import (
     fetch_trials as core_fetch_trials,
@@ -48,7 +46,8 @@ def extract_from_sentence(text: str) -> Dict[str, str]:
 def print_trials(trials: List[Dict[str, Any]], limit: Optional[int] = None) -> None:
     shown = trials if limit is None else trials[:limit]
     for i, t in enumerate(shown, 1):
-        print(f"{i}. {t['title']}\n   Phase: {t['phase']} | Status: {t['status']} | Condition: {t['condition']}\n")
+        print(
+            f"{i}. {t['title']}\n   Phase: {t['phase']} | Status: {t['status']} | Condition: {t['condition']}\n")
     if limit and len(trials) > limit:
         print(f"... and {len(trials) - limit} more.")
 
@@ -61,28 +60,37 @@ def agent_mode(initial_query: str, page_size: int = 5) -> None:
     print("🤖 Agent mode. Commands: more | filter | refine | clear | summarize | exit\n")
 
     while True:
-        print(f"🔍 Fetching: '{query}' | pageSize={cur_page} | filters={{'phase': '{phase}', 'status': '{status}', 'condition': '{condition}'}}");
+        print(
+            f"🔍 Fetching: '{query}' | pageSize={cur_page} | filters={{'phase': '{phase}', 'status': '{status}', 'condition': '{condition}'}}")
+
         trials = fetch_trials(query, page_size=cur_page)
-        trials = apply_filters(trials, phase=phase, status=status, condition=condition)
+        trials = apply_filters(trials, phase=phase,
+                               status=status, condition=condition)
 
         if not trials:
             print("No studies found with current filters.")
+
         else:
             print_trials(trials, limit=min(10, len(trials)))
             print("\n🧾 Summary:\n")
             print(llm_summarize(trials, query))
 
-        raw = input("\nNext [more|filter|refine|clear|summarize|exit or type a sentence]: ").strip()
+        raw = input(
+            "\nNext [more|filter|refine|clear|summarize|exit or type a sentence]: ").strip()
         cmd = raw.lower()
+
         if cmd == "exit":
             print("Goodbye.")
             return
+
         if cmd == "more":
             cur_page = min(cur_page + 10, 100)
             continue
+
         if cmd == "filter":
             k = input("Key [phase|status|condition]: ").strip().lower()
             v = input("Value: ").strip()
+
             if k == "phase":
                 phase = v
             elif k == "status":
@@ -92,17 +100,21 @@ def agent_mode(initial_query: str, page_size: int = 5) -> None:
             else:
                 print("Unknown filter key.")
             continue
+
         if cmd == "refine":
             query = input("New query: ").strip()
             continue
+
         if cmd == "clear":
             phase = status = condition = ""
             print("Filters cleared.")
             continue
+
         if cmd == "summarize":
             print("\n🧾 Summary:\n")
             print(llm_summarize(trials, query))
             continue
+
         # Treat as natural sentence: extract filters and set query
         guessed = extract_from_sentence(raw)
         if guessed:
@@ -111,11 +123,12 @@ def agent_mode(initial_query: str, page_size: int = 5) -> None:
             status = guessed.get("status", status)
             condition = guessed.get("condition", condition)
         # Update main query to the sentence itself
+
         if raw:
             query = raw
             print(f"Query set to: {query}")
             if guessed:
-                                print(f"Parsed filters: {guessed}")
+                print(f"Parsed filters: {guessed}")
         else:
             print("Unknown command.")
 
@@ -187,12 +200,15 @@ def build_web_app() -> Flask:
             function append(role, text) {
                 const div = document.createElement('div');
                 div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+    
                 const label = document.createElement('span');
                 label.className = 'label';
                 label.textContent = role === 'user' ? 'You' : 'Agent';
+
                 const content = document.createElement('span');
                 content.className = 'content';
                 content.textContent = ' ' + text;
+
                 div.appendChild(label);
                 div.appendChild(content);
                 chat.appendChild(div);
@@ -202,12 +218,14 @@ def build_web_app() -> Flask:
             function setStatus(s) {
                 const filters = s?.filters || {};
                 const pieces = [];
+            
                 if (s?.query) pieces.push(`query: "${s.query}"`);
                 const phase = filters.phase ? `phase=${filters.phase}` : '';
                 const st = filters.status ? `status=${filters.status}` : '';
                 const cond = filters.condition ? `condition=${filters.condition}` : '';
                 const sort = filters.sort ? `sort=${filters.sort}` : '';
                 const limit = filters.limit ? `limit=${filters.limit}` : '';
+    
                 const fs = [phase, st, cond, sort, limit].filter(Boolean).join(' · ');
                 if (fs) pieces.push(fs);
                 if (s?.page_size) pieces.push(`pageSize=${s.page_size}`);
@@ -328,7 +346,8 @@ def build_web_app() -> Flask:
             payload = {}
 
         message = (payload.get("message") or "").strip()
-        state = payload.get("state") or {"query": "", "page_size": 5, "filters": {}}
+        state = payload.get("state") or {
+            "query": "", "page_size": 5, "filters": {}}
 
         if message.lower() in {"help", "/help"}:
             help_msg = (
@@ -396,6 +415,7 @@ def build_web_app() -> Flask:
             q = message[10:].strip() or state.get("query", "")
             if not q:
                 return jsonify({"reply": "Provide a topic, e.g. 'agent run keytruda in nsclc'.", "state": state})
+
             try:
                 from clinagent_crewai import build_crew  # lazy import to avoid hard dependency
             except Exception as e:
@@ -403,8 +423,10 @@ def build_web_app() -> Flask:
                     "reply": f"Agent pipeline not available: {e.__class__.__name__}: {e}\n\nInstall deps:\n  pip install -r requirements.txt\nOr uncheck 'Use Agents' and try again.",
                     "state": state,
                 })
+
             crew = build_crew()
-            result = crew.kickoff(inputs={"query": q, "page_size": int(state.get("page_size", 5))})
+            result = crew.kickoff(
+                inputs={"query": q, "page_size": int(state.get("page_size", 5))})
             # best effort stringify
             reply = f"{result}"
             return jsonify({"reply": reply, "state": state})
@@ -422,6 +444,7 @@ def build_web_app() -> Flask:
 
         if message.lower() == "show" or state.get("query"):
             q = state.get("query", "").strip()
+            print(f"the current state {state}")
             if not q:
                 return jsonify({"reply": "Provide a query, e.g. 'phase 3 diabetes', or use 'refine <query>'.", "state": state})
             try:
@@ -434,14 +457,17 @@ def build_web_app() -> Flask:
                             "reply": f"Agent pipeline not available: {e.__class__.__name__}: {e}\n\nInstall deps:\n  pip install -r requirements.txt\nOr uncheck 'Use Agents' and try again.",
                             "state": state,
                         })
+
                     crew = build_crew()
-                    result = crew.kickoff(inputs={"query": q, "page_size": int(state.get("page_size", 5))})
+                    result = crew.kickoff(
+                        inputs={"query": q, "page_size": int(state.get("page_size", 5))})
                     # Robust stringify; fallback to regular path if empty
                     text = ""
                     try:
                         text = str(result) if result is not None else ""
                     except Exception:
                         text = ""
+
                     if text and text.strip():
                         return jsonify({"reply": text, "state": state})
                     # Fallback to regular flow if agent returned nothing useful
@@ -451,7 +477,8 @@ def build_web_app() -> Flask:
                 use_refiner = state.get("refiner")
                 if use_refiner is None:
                     # default from env (off unless explicitly enabled)
-                    use_refiner = (os.getenv("CLINAGENT_REFINE", "0").lower() in {"1", "true", "yes", "on"})
+                    use_refiner = (os.getenv("CLINAGENT_REFINE", "0").lower() in {
+                                   "1", "true", "yes", "on"})
 
                 if use_refiner:
                     rq = refine_query(q)
@@ -484,7 +511,8 @@ def build_web_app() -> Flask:
                     base_q = cond or refined_q or q
                     alt_q = simplify_term(base_q)
                     if alt_q and alt_q != refined_q:
-                        trials = fetch_trials(alt_q, page_size=max(page_size, limit or 0, 20))
+                        trials = fetch_trials(
+                            alt_q, page_size=max(page_size, limit or 0, 20))
                         trials = apply_filters(
                             trials,
                             phase=str(fdict.get("phase", "")),
@@ -495,7 +523,8 @@ def build_web_app() -> Flask:
                 # Sort if requested (e.g., 'recent')
                 sort_hint = str(fdict.get("sort", "")).lower()
                 if sort_hint in {"recent", "latest", "newest", "last_update"}:
-                    trials = sort_trials(trials, key="last_update", descending=True)
+                    trials = sort_trials(
+                        trials, key="last_update", descending=True)
                 # 'limit' already parsed above
             except Exception as e:
                 return jsonify({"reply": f"Error: {e}", "state": state})
@@ -516,13 +545,20 @@ def build_web_app() -> Flask:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Clinical trials tool (one-shot or agent mode)")
-    parser.add_argument("query", nargs="?", help="Search query (e.g., 'phase 3 diabetes')")
-    parser.add_argument("--page-size", type=int, default=5, help="Trials per fetch (default 5)")
-    parser.add_argument("--agent", action="store_true", help="Run interactive agent mode")
-    parser.add_argument("--web", action="store_true", help="Run minimal web UI on http://127.0.0.1:5000")
-    parser.add_argument("--host", default="127.0.0.1", help="Web host (default 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=5000, help="Web port (default 5000)")
+    parser = argparse.ArgumentParser(
+        description="Clinical trials tool (one-shot or agent mode)")
+    parser.add_argument("query", nargs="?",
+                        help="Search query (e.g., 'phase 3 diabetes')")
+    parser.add_argument("--page-size", type=int, default=5,
+                        help="Trials per fetch (default 5)")
+    parser.add_argument("--agent", action="store_true",
+                        help="Run interactive agent mode")
+    parser.add_argument("--web", action="store_true",
+                        help="Run minimal web UI on http://127.0.0.1:5000")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Web host (default 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=5000,
+                        help="Web port (default 5000)")
     args = parser.parse_args(argv)
 
     if args.web:
@@ -531,12 +567,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.agent:
-        q = args.query or input("Enter your goal (e.g., 'phase 3 diabetes trials'): ")
+        q = args.query or input(
+            "Enter your goal (e.g., 'phase 3 diabetes trials'): ")
         agent_mode(q, page_size=args.page_size)
         return 0
 
     # one-shot mode
-    q = args.query or input("Enter your question (e.g., 'new phase 3 diabetes trials'): ")
+    q = args.query or input(
+        "Enter your question (e.g., 'new phase 3 diabetes trials'): ")
     print(f"🔍 Searching trials for: {q}")
     trials = fetch_trials(q, page_size=args.page_size)
     if not trials:
