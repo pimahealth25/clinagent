@@ -14,7 +14,7 @@ from core.clinicaltrials import (
     format_trials as core_format_trials,
 )
 from core.llm import llm_summarize as core_llm_summarize, refine_query
-from flask import Flask, request, jsonify, render_template_string, render_template, url_for
+from flask import Flask, request, jsonify, render_template
 
 # Load environment if present
 load_dotenv()
