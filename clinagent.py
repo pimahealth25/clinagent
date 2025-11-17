@@ -171,6 +171,7 @@ def build_web_app() -> Flask:
 
         if message.lower().startswith("refine "):
             state["query"] = message[7:].strip()
+            # call show function so it shows the results after refining
             return jsonify({"reply": f"Query set to: {state['query']}. Click Show.", "state": state})
 
         if message.lower().startswith("filter "):
@@ -179,8 +180,17 @@ def build_web_app() -> Flask:
             if m:
                 k, v = m.group(1).lower(), m.group(2).strip()
                 state.setdefault("filters", {})[k] = v
+                # call show function so it shows the results after setting filter
                 return jsonify({"reply": f"Filter set: {k}={v}. Click Show.", "state": state})
             return jsonify({"reply": "Use: filter phase=<v>|status=<v>|condition=<v>", "state": state})
+
+        if message.lower() == "more":
+            state["page_size"] = min(int(state.get("page_size", 5)) + 10, 100)
+            return jsonify({"reply": f"Page size: {state['page_size']}. Click Show.", "state": state})
+
+        if message.lower() == "clear":
+            state["filters"] = {}
+            return jsonify({"reply": "Filters cleared. Click Show.", "state": state})
 
         # Toggle refiner
         if message.lower() in {"refiner on", "refiner off"}:
@@ -191,20 +201,6 @@ def build_web_app() -> Flask:
         if message.lower() in {"debug on", "debug off"}:
             state["debug"] = message.lower().endswith("on")
             return jsonify({"reply": f"Debug set to: {'on' if state.get('debug') else 'off'}.", "state": state})
-
-        # Support "show <query>" as a command to both set and fetch
-        if message.lower().startswith("show "):
-            state["query"] = message[5:].strip()
-            state["filters"] = {}
-            message = "show"
-
-        if message.lower() == "more":
-            state["page_size"] = min(int(state.get("page_size", 5)) + 10, 100)
-            return jsonify({"reply": f"Page size: {state['page_size']}. Click Show.", "state": state})
-
-        if message.lower() == "clear":
-            state["filters"] = {}
-            return jsonify({"reply": "Filters cleared. Click Show.", "state": state})
 
         # Free-form sentence: auto-extract filters and set query
         # Toggle agent mode
@@ -232,6 +228,12 @@ def build_web_app() -> Flask:
             # best effort stringify
             reply = f"{result}"
             return jsonify({"reply": reply, "state": state})
+
+        # Support "show <query>" as a command to both set and fetch
+        if message.lower().startswith("show "):
+            state["query"] = message[5:].strip()
+            state["filters"] = {}
+            message = "show"
 
         if message and message.lower() not in {"show"} and not message.lower().startswith(("refine ", "filter ", "more", "clear")):
             guessed = extract_from_sentence(message)

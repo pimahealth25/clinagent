@@ -218,6 +218,7 @@ def apply_filters_dict(trials: List[Dict[str, Any]], filters: Dict[str, str]) ->
 
 
 def format_trials(trials: List[Dict[str, Any]], limit: int = 10) -> str:
+    '''Format a list of trials into a human-readable string.'''
     lines = []
     for i, t in enumerate(trials[:limit], 1):
         lines.append(
