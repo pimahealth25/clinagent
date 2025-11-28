@@ -1,0 +1,170 @@
+/* ===============================
+   Base Layout
+================================ */
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: #f6f7f9;
+  font-family: system-ui, sans-serif;
+  color: #1a1a1a;
+}
+
+.app-container {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+/* ===============================
+   Title
+================================ */
+
+.app-title {
+  text-align: center;
+  font-size: 1.7rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* ===============================
+   Input + Button
+================================ */
+
+.chat-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.send-btn {
+  margin: 14px auto 0 auto;
+  display: block;
+  padding: 10px 18px;
+  background: #0066ff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.send-btn:hover {
+  background: #0053d6;
+}
+
+/* ===============================
+   Chat Output Container
+================================ */
+
+.chat-output {
+  margin-top: 24px;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #ddd;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Smooth fade animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===============================
+   BLOCK TYPE STYLES
+================================ */
+
+.chat-block {
+  margin: 16px 0;
+  word-break: break-word;
+}
+
+.blocks-container {
+  width: 100%;
+}
+
+/* Headings */
+.block-heading {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.block-heading[data-level="1"] {
+  font-size: 1.4rem;
+}
+.block-heading[data-level="2"] {
+  font-size: 1.25rem;
+}
+.block-heading[data-level="3"] {
+  font-size: 1.1rem;
+}
+
+/* Paragraph */
+.block-paragraph {
+  font-size: 0.95rem;
+  color: #555;
+  margin-top: 4px;
+}
+
+/* Bullet List */
+.block-bullet-list {
+  margin-left: 24px;
+}
+.block-bullet-list li {
+  list-style: disc;
+  margin: 4px 0;
+  color: #555;
+}
+
+/* Card */
+.block-card {
+  background: #f5f7fa;
+  border: 1px solid #e3e3e3;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 14px 0;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.block-card .card-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.block-card .card-subtitle {
+  font-size: 0.85rem;
+  color: #777;
+  margin-bottom: 8px;
+}
+
+/* Section */
+.block-section {
+  border-left: 3px solid #e3e3e3;
+  padding-left: 12px;
+  margin: 16px 0;
+}
+
+.block-section-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* ===============================
+   Responsive
+================================ */
+
+@media (max-width: 600px) {
+  .app-container {
+    padding: 0 10px;
+  }
+}

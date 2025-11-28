@@ -1,12 +1,216 @@
 from __future__ import annotations
+from pytrials.client import ClinicalTrials
 
 import re
 from typing import List, Dict, Any, Tuple, Optional
 
 import requests
+import pandas as pd
 from requests.exceptions import RequestException
 
+
 API_URL = "https://clinicaltrials.gov/api/v2/studies"
+
+ct = ClinicalTrials()
+
+
+def run_full_studies(search_expr: str, max_studies: int = 50):
+    full_studies = ct.get_full_studies(
+        search_expr=search_expr, max_studies=max_studies)
+
+    print("#######################################")
+    print(f'full_studies func: {str(full_studies)[:100]}')
+    print("#######################################")
+
+    df = pd.DataFrame.from_records(full_studies[1:], columns=full_studies[0])
+    df.to_csv("full_studies.csv", index=False)
+
+    return df.to_dict(orient="records")
+
+
+def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt: str = "csv"):
+    '''
+    Docstring for run_study_fields
+
+    :param search_expr: Description
+    :type search_expr: str
+    :param fields: Description
+    :type fields: list
+    :param max_studies: Description
+    :type max_studies: int
+    :param fmt: Description
+    :type fmt: str
+    '''
+    search_expr = search_expr.replace(" ", "+")
+
+    results = ct.get_study_fields(
+        search_expr=search_expr,
+        fields=clean_fields(fields),
+        max_studies=max_studies,
+        fmt=fmt,
+    )
+
+    print("#######################################")
+    print(f'results run field function: {str(results)[:100]}...')
+    print("#######################################")
+
+    studies = results.get("studies", [])
+
+    parse_results, _ = parse_clinical_studies(studies)
+
+    df = pd.DataFrame(parse_results)
+
+    # Optional export
+    df.to_csv("study_fields.csv", index=False)
+
+    return df.to_dict(orient="records")
+
+
+def extract_value(protocol_section, study, module_name, field_name, default=""):
+    """
+    Extract a field from a protocolSection module or fall back
+    to the study-level field. Returns empty string instead of None.
+    """
+    module = protocol_section.get(module_name, {}) or {}
+    value = module.get(field_name) or study.get(field_name) or default
+    return default if value is None else value
+
+
+def clean_fields(fields: List[str]) -> List[str]:
+    """Clean and validate requested fields for study fields retrieval."""
+    VALID_STUDY_FIELDS = [
+        "NCTId",
+        "BriefTitle",
+        "Condition",
+        "OverallStatus",
+        "Phase",
+        "StudyType",
+        "StartDate",
+        "CompletionDate",
+        "LastUpdatePostDate",
+        "BriefSummary",
+        "LocationCountry",
+        "LocationCity",
+        "LocationState",
+        "CentralContactName",
+        "CentralContactPhone",
+        "CentralContactEMail"
+    ]
+    return [f for f in fields if f in VALID_STUDY_FIELDS]
+
+
+def extract_list(value, default=""):
+    """
+    Convert a list into a comma-separated string.
+    For non-lists, convert to string. Guaranteed no None return.
+    """
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    return str(value) if value not in (None, "") else default
+
+
+def extract_date(module, struct_name):
+    """
+    Extract a date from a dateStruct (which uses 'date' field in v2 API).
+    Example:
+      "startDateStruct": { "date": "2010-09" }
+    """
+    struct = module.get(struct_name, {}) or {}
+    date_raw = struct.get("date")
+    return date_raw if date_raw else ""
+
+
+def extract_interventions(section):
+    """
+    Extract and join all intervention names under armsInterventionsModule.
+    """
+    module = section.get("armsInterventionsModule", {}) or {}
+    interventions = module.get("interventions", []) or []
+
+    names = [i.get("name") for i in interventions if "name" in i]
+    return ", ".join(names) if names else ""
+
+
+def extract_countries(section):
+    """
+    Extract country list from contactsLocationsModule.
+    """
+    module = section.get("contactsLocationsModule", {}) or {}
+    locations = module.get("locations", []) or []
+
+    countries = [loc.get("country") for loc in locations if loc.get("country")]
+    return ", ".join(countries) if countries else ""
+
+
+def parse_clinical_studies(studies: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """
+    Fully improved ClinicalTrials.gov v2 study parser.
+
+    Returns a list of clean, normalized study dictionaries
+    with no None values and complete useful fields.
+    """
+    if studies is None:
+        return [], []
+
+    parsed = []
+
+    for study in studies:
+        section = study.get("protocolSection", {}) or {}
+        status_module = section.get("statusModule", {}) or {}
+
+        # --- Identification ---
+        nct_id = extract_value(
+            section, study, "identificationModule", "nctId", "")
+        title = extract_value(
+            section, study, "identificationModule", "briefTitle", "Untitled")
+
+        # --- Conditions ---
+        conditions_raw = extract_value(
+            section, study, "conditionsModule", "conditions", [])
+        conditions = extract_list(conditions_raw, default="N/A")
+
+        # --- Phase ---
+        phase_raw = extract_value(section, study, "designModule", "phases", [])
+        phase = extract_list(phase_raw, default="N/A")
+
+        # --- Study type ---
+        study_type = extract_value(
+            section, study, "designModule", "studyType", "N/A")
+
+        # --- Status ---
+        status = extract_value(
+            section, study, "statusModule", "overallStatus", "N/A")
+
+        # --- Dates ---
+        start_date = extract_date(status_module, "startDateStruct")
+        primary_completion_date = extract_date(
+            status_module, "primaryCompletionDateStruct")
+        completion_date = extract_date(status_module, "completionDateStruct")
+        last_update = extract_date(status_module, "lastUpdatePostDateStruct")
+
+        # --- Interventions ---
+        interventions = extract_interventions(section)
+
+        # --- Countries ---
+        country = extract_countries(section)
+
+        # --- Build result row ---
+        parsed.append({
+            "nct_id": nct_id,
+            "title": title,
+            "phase": phase,
+            "study_type": study_type,
+            "status": status,
+            "condition": conditions,
+            "interventions": interventions,
+            "country": country,
+            "start_date": start_date,
+            "primary_completion_date": primary_completion_date,
+            "completion_date": completion_date,
+            "last_update": last_update,
+        })
+
+    return parsed, list(parsed[0].keys()) if parsed else []
 
 
 def _coerce_date(value: Optional[str]) -> str:

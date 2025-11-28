@@ -13,6 +13,7 @@ from core.clinicaltrials import (
     sort_trials,
     format_trials as core_format_trials,
 )
+
 from core.llm import llm_summarize as core_llm_summarize, refine_query
 from flask import Flask, request, jsonify, render_template
 

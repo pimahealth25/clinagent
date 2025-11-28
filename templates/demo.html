@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Clinical Trials Search</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/chat.css') }}"
+    />
+    <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      <h1 class="app-title">Clinical Trials Search</h1>
+
+      <textarea
+        id="input"
+        class="chat-input"
+        rows="4"
+        placeholder="Find trials for stage 3 melanoma in the US"
+      ></textarea>
+
+      <button class="send-btn" onclick="sendMessage()">Search</button>
+
+      <div id="chat-output" class="chat-output"></div>
+    </div>
+  </body>
+</html>
