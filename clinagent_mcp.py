@@ -60,8 +60,18 @@ def index():
 def ask():
     '''
     are there any trials on breast cancer that doesn't involve chemotherapy
+
+    sample of input: 
+    ser input: {'id': '1764632899771', 'role': 'user', 
+    'content': "2 trials on breast cancer that doesn't involve chemotherapy", 'is_streaming': False, 'conversation_id': 2}
     '''
-    user_message = request.json.get("message", "")
+    # user_message = request.json.get("message", "")
+    query = request.json.get("message", "")
+    user_message = query.get("content", "")
+
+    print("#######################################")
+    print(f' user input: {user_message}')
+    print("#######################################")
 
     # ChatGPT will automatically call the MCP tool.
     response = client.chat.completions.create(
@@ -69,33 +79,51 @@ def ask():
         messages=[
             {
                 "role": "system",
-                "content": ("""You are a clinical trial assistant. You convert natural-language queries
-                            into valid ClinicalTrials.gov search expressions.
+                "content": (
+                    """
+                    You are a clinical trial assistant. You convert natural-language questions
+                    into valid ClinicalTrials.gov v2 search expressions.
 
-                            Rules:
-                            1. ALWAYS construct valid ClinicalTrials.gov AREA[...] expressions.
-                            2. NEVER pass plain English text directly as a search term.
-                            3. Map user intent:
-                            - Condition -> AREA[Condition]
-                            - Disease -> AREA[Condition]
-                            - Status -> AREA[OverallStatus]
-                            - Phase -> AREA[Phase]
-                            - Start year or date -> AREA[StartDate]
-                            4. For years, use RANGE:
-                            - Example: 2025 -> AREA[StartDate]RANGE[2025, 2025]
-                            - “2024–2026” -> AREA[StartDate]RANGE[2024, 2026]
-                            5. If user wants detailed study info → call run_full_studies
-                            6. If user wants summary → call run_study_fields
-                            7. Always use AND between conditions.
+                    STRICT RULES:
+                    1. NEVER generate AREA[...] syntax. It is NOT supported in API v2.
+                    2. ALWAYS generate Boolean search expressions using:
+                    - AND
+                    - OR
+                    - NOT
+                    - Parentheses where needed
+                    3. ALWAYS use plain field terms (Condition, Intervention, Phase, Status)
+                    but DO NOT wrap them in AREA[...] blocks.
+                    4. VALID EXAMPLES OF v2 QUERY SYNTAX:
+                    - "Breast Cancer AND NOT Chemotherapy"
+                    - "(Lung Cancer) AND (Phase 2)"
+                    - "(Breast Cancer) AND (Recruiting)"
+                    - "Diabetes AND Metformin AND NOT Insulin"
+                    5. Date filters MUST follow API v2 syntax:
+                    - StartDate:2025
+                    - StartDate:[2024 TO 2026]
+                    6. Select the function:
+                    - If the user wants summary or basic details → call run_study_fields.
+                    - If the user wants full details or comprehensive listing → call run_full_studies.
+                    7. ALWAYS keep search expressions compact, free of English phrases.
+                    8. NEVER include natural-language explanations in the search query.
 
-                            Examples:
-                            - "recruiting breast cancer trials" ->
-                            AREA[Condition]Breast Cancer AND AREA[OverallStatus]Recruiting
+                    MAPPING GUIDE:
+                    - Condition/Disease → “Breast Cancer”, “Lung Cancer”
+                    - Treatment/Intervention → “Chemotherapy”, “Metformin”
+                    - Status → “Recruiting”, “Completed”, “Terminated”
+                    - Phase → “Phase 1”, “Phase 2”, etc.
+                    - Dates → StartDate:YYYY or StartDate:[YYYY TO YYYY]
 
-                            - "phase 2 lung cancer studies starting in 2025" →
-                            AREA[Condition]Lung Cancer AND AREA[Phase]Phase 2
-                            AND AREA[StartDate]RANGE[2025, 2025]"""
-                            )
+                    EXAMPLES:
+                    - "recruiting breast cancer trials" →
+                    "Breast Cancer AND Recruiting"
+
+                    - "phase 2 lung cancer studies starting in 2025" →
+                    "Lung Cancer AND Phase 2 AND StartDate:2025"
+
+                    """
+
+                )
             },
             {"role": "user", "content": user_message}
         ],
@@ -135,35 +163,18 @@ def ask():
         messages=[
             {"role": "system",  "content": (
                 """
-                You are an internal medical research assistant. Summarize clinical study data already retrieved.
+                You are a medical research assistant. Summarize the clinical study data provided to you.
 
-                Rules:
-                1. Do NOT mention sources or websites.
-                2. Do NOT instruct the user to search externally.
-                3. Do NOT speculate on missing data.
-                4. If no studies match, return: "No studies matched the criteria."
-                5. Summarize studies grouped by patterns (phase, condition, intervention type).
-                6. Do NOT reference the system, tools, or schemas.
-                7. Avoid disclaimers or meta commentary.
-
-                OUTPUT FORMAT (MANDATORY):
-                - Return only valid JSON with a root "blocks" array.
-                - Allowed block types: "heading", "paragraph", "bullet_list", "card", "section".
-                - Nest blocks using "blocks" arrays inside sections or cards.
-                - Headings may have optional "level" (1-6); cards may have optional "subtitle".
-                - Bullet lists use "bullets" arrays of strings only.
-                - Convert label/value pairs into paragraph blocks inside the parent card.
-                - Unknown or novel sections must still be blocks.
-                - Never use markdown or text outside JSON.
-                - Output must be self-contained, fully following the block schema recursively.
-
-                Efficiency guidance:
-                - Include only actual values; omit empty fields.
-                - Focus on essential details: study id, title, phase, status, condition, interventions, start/completion dates, primary focus.
-                - Use concise paragraph text.
-                - Bullet lists summarize patterns or key highlights across multiple studies only.
-                - Avoid repetitive placeholders like "Not specified" unless necessary for clarity.
-                - Preserve all meaningful study information while minimizing token usage.
+                Guidelines:
+                Output clean Markdown only.
+                Do not mention external websites or sources.
+                Do not instruct the user to search anywhere.
+                Do not speculate about missing data.
+                If the list is empty, respond:
+                No studies matched the criteria.
+                Group summaries using meaningful medical patterns (phase, condition, interventions).
+                Do not reference tools, schemas, or the system.
+                No disclaimers or meta commentary.
                 """
 
             )},

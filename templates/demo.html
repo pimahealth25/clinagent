@@ -1,28 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Clinical Trials Search</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Application</title>
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/chat.css') }}"
+      href="{{ url_for('static', filename='css/style.css') }}"
     />
-    <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
   </head>
-
   <body>
-    <div class="app-container">
-      <h1 class="app-title">Clinical Trials Search</h1>
+    <div id="root"></div>
 
-      <textarea
-        id="input"
-        class="chat-input"
-        rows="4"
-        placeholder="Find trials for stage 3 melanoma in the US"
-      ></textarea>
-
-      <button class="send-btn" onclick="sendMessage()">Search</button>
-
-      <div id="chat-output" class="chat-output"></div>
-    </div>
+    <script src="{{ url_for('static', filename='js/config.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/chatroom.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   </body>
 </html>

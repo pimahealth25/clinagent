@@ -28,7 +28,7 @@ def run_full_studies(search_expr: str, max_studies: int = 50):
     return df.to_dict(orient="records")
 
 
-def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt: str = "csv"):
+def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt: str = "json"):
     '''
     Docstring for run_study_fields
 
