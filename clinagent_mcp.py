@@ -4,9 +4,15 @@ from dotenv import load_dotenv
 import os
 import json
 from core.clinicaltrials import run_full_studies, run_study_fields
+from core.preprocessor import resolve_field_set, shrink_trials, load_studies_from_csv
+from core.preprocessor import normalize_field_names
+from core.tasks import summarize_incrementally
+from core.cache import get_cached_summary, get_cached_raw, set_cached_raw, set_cached_summary, clear_all_caches
+from core.llm import summarize_studies_json
 
 load_dotenv()
 client = OpenAI()
+# clear_all_caches()
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 
@@ -21,7 +27,7 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "search_expr": {"type": "string"},
-                    "max_studies": {"type": "number"}
+                    "max_studies": {"type": "number", "default": 10, "maximum": 50},
                 },
                 "required": ["search_expr"]
             }
@@ -40,7 +46,7 @@ TOOLS = [
                         "type": "array",
                         "items": {"type": "string"}
                     },
-                    "max_studies": {"type": "number"},
+                    "max_studies": {"type": "number", "default": 50, "maximum": 200},
                     "fmt": {"type": "string"}
                 },
                 "required": ["search_expr", "fields"]
@@ -61,80 +67,76 @@ def ask():
     '''
     are there any trials on breast cancer that doesn't involve chemotherapy
 
-    sample of input: 
-    ser input: {'id': '1764632899771', 'role': 'user', 
+    sample of input:
+    ser input: {'id': '1764632899771', 'role': 'user',
     'content': "2 trials on breast cancer that doesn't involve chemotherapy", 'is_streaming': False, 'conversation_id': 2}
     '''
     # user_message = request.json.get("message", "")
     query = request.json.get("message", "")
-    user_message = query.get("content", "")
+    user_message = query.get("content", "") if isinstance(
+        query, dict) else str(query)
 
-    print("#######################################")
-    print(f' user input: {user_message}')
-    print("#######################################")
+    print(f"[ASK] User input: {user_message[:80]}...")
 
-    # ChatGPT will automatically call the MCP tool.
-    response = client.chat.completions.create(
-        model="gpt-5.1",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    """
-                    You are a clinical trial assistant. You convert natural-language questions
-                    into valid ClinicalTrials.gov v2 search expressions.
+    # ===== STAGE 1: GENERATE SEARCH EXPRESSION =====
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {
+                    "role": "system",
+                    "content":
+                    ("""
+                   You are a clinical trial assistant. You convert natural-language questions
+                    into valid ClinicalTrials.gov API v2 Boolean search expressions.
 
                     STRICT RULES:
-                    1. NEVER generate AREA[...] syntax. It is NOT supported in API v2.
-                    2. ALWAYS generate Boolean search expressions using:
+                    1. NEVER generate AREA[...] syntax. It is NOT supported.
+                    2. NEVER generate field-prefixed filters like Status:Recruiting, Condition:Breast Cancer, Phase:2, etc.
+                    3. The ONLY allowed field-prefixed syntax is date ranges:
+                    - StartDate:YYYY
+                    - StartDate:[YYYY TO YYYY]
+                    4. ALL OTHER TERMS must be plain text combined with Boolean logic:
                     - AND
                     - OR
                     - NOT
-                    - Parentheses where needed
-                    3. ALWAYS use plain field terms (Condition, Intervention, Phase, Status)
-                    but DO NOT wrap them in AREA[...] blocks.
-                    4. VALID EXAMPLES OF v2 QUERY SYNTAX:
+                    - Parentheses when needed
+                    5. VALID QUERY EXAMPLES:
                     - "Breast Cancer AND NOT Chemotherapy"
+                    - "Melanoma AND Stage 3 AND Recruiting"
                     - "(Lung Cancer) AND (Phase 2)"
-                    - "(Breast Cancer) AND (Recruiting)"
                     - "Diabetes AND Metformin AND NOT Insulin"
-                    5. Date filters MUST follow API v2 syntax:
-                    - StartDate:2025
-                    - StartDate:[2024 TO 2026]
+                    - "Breast Cancer AND Recruiting AND StartDate:[2023 TO 2025]"
                     6. Select the function:
-                    - If the user wants summary or basic details → call run_study_fields.
-                    - If the user wants full details or comprehensive listing → call run_full_studies.
-                    7. ALWAYS keep search expressions compact, free of English phrases.
-                    8. NEVER include natural-language explanations in the search query.
+                    - If user wants summary/basic details → call run_study_fields
+                    - If user wants full details/full listing → call run_full_studies
+                    7. Output ONLY the compact Boolean search expression. No explanations.
 
-                    MAPPING GUIDE:
-                    - Condition/Disease → “Breast Cancer”, “Lung Cancer”
-                    - Treatment/Intervention → “Chemotherapy”, “Metformin”
-                    - Status → “Recruiting”, “Completed”, “Terminated”
-                    - Phase → “Phase 1”, “Phase 2”, etc.
-                    - Dates → StartDate:YYYY or StartDate:[YYYY TO YYYY]
+                    MAPPING:
+                    - Diseases → plain (e.g., “Breast Cancer")
+                    - Interventions → plain (e.g., “Chemotherapy", “Metformin")
+                    - Status → plain (e.g., “Recruiting”, “Completed”)
+                    - Phases → plain (e.g., “Phase 1”, “Phase 2”)
 
                     EXAMPLES:
-                    - "recruiting breast cancer trials" →
-                    "Breast Cancer AND Recruiting"
-
-                    - "phase 2 lung cancer studies starting in 2025" →
-                    "Lung Cancer AND Phase 2 AND StartDate:2025"
-
+                    User: "recruiting breast cancer trials"
+                    → "Breast Cancer AND Recruiting"
                     """
+                     )
+                },
+                {"role": "user", "content": user_message}
+            ],
+            tools=TOOLS,
+            tool_choice="required"
+        )
 
-                )
-            },
-            {"role": "user", "content": user_message}
-        ],
-        tools=TOOLS,
-        tool_choice="auto"
-    )
+        msg = response.choices[0].message
+        print("#######################################")
+        print(f'mesg: {msg}')
+        print("#######################################")
 
-    msg = response.choices[0].message
-    print("#######################################")
-    print(f'mesg: {msg}')
-    print("#######################################")
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate search expression: {str(e)}"}), 500
 
     # No tool call → Just reply normally
     if not msg.tool_calls:
@@ -144,55 +146,196 @@ def ask():
     func_name = tool_call.function.name
     args = json.loads(tool_call.function.arguments)
 
-    print("#######################################")
-    print(f"function: {func_name} arg: {args}")
-    print("#######################################")
+    search_expr = args.get("search_expr", "")
+    job_mode = args.get("job_mode", "inline")
+    max_studies = args.get("max_studies", 10)
 
-    result = ''
-    # Run actual Python function locally
-    if func_name == "run_full_studies":
-        result = run_full_studies(**args)
-    elif func_name == "run_study_fields":
-        result = run_study_fields(**args)
+    print(f"[ASK] Function: {func_name}")
+    print(f"[ASK] Search expr: {search_expr}")
+
+    # ===== STAGE 2: RESOLVE FIELD SET =====
+    field_names = resolve_field_set(args.get("fields", "essential"))
+
+    # ===== STAGE 3: CHECK CACHE FOR SUMMARY =====
+    cached_summary = get_cached_summary(
+        search_expr, field_names or [], "gpt-4.1")
+
+    if cached_summary:
+        print("[ASK] ✓ CACHE HIT: summary found")
+        return jsonify({
+            "response": cached_summary,
+            "from_cache": True,
+            "cache_type": "summary"
+        })
+
+    # ===== STAGE 4: CHECK CACHE FOR RAW RESULTS =====
+    cached_raw = get_cached_raw(search_expr, max_studies, field_names or [])
+
+    if cached_raw:
+        print(
+            f"[ASK] ✓ CACHE HIT: raw results found ({len(cached_raw)} studies)")
+        result = cached_raw
     else:
-        return jsonify({"response": f"Unknown function: {func_name}"})
+        # ===== STAGE 5: FETCH FROM API =====
+        print("[ASK] CACHE MISS: fetching from API...")
+        try:
+            if func_name == "run_full_studies":
+                result = run_full_studies(search_expr, max_studies=max_studies)
+            elif func_name == "run_study_fields":
+                # Pass resolved field names
+                result = run_study_fields(
+                    search_expr=search_expr,
+                    fields=field_names or [],
+                    max_studies=max_studies
+                )
+            else:
+                return jsonify({"error": f"Unknown function: {func_name}"}), 400
 
-    # Summarize the result
-    summary = client.chat.completions.create(
-        model="gpt-5.1",
-        messages=[
-            {"role": "system",  "content": (
-                """
-                You are a medical research assistant. Summarize the clinical study data provided to you.
+            # Cache the raw results
+            set_cached_raw(search_expr, max_studies,
+                           field_names or [], result, ttl=600)
+            print(f"[ASK] ✓ Fetched {len(result)} studies and cached")
+        except Exception as e:
+            print(f"[ASK] ✗ Fetch failed: {e}")
+            return jsonify({"error": f"Failed to fetch studies: {str(e)}"}), 500
 
-                Guidelines:
-                Output clean Markdown only.
-                Do not mention external websites or sources.
-                Do not instruct the user to search anywhere.
-                Do not speculate about missing data.
-                If the list is empty, respond:
-                No studies matched the criteria.
-                Group summaries using meaningful medical patterns (phase, condition, interventions).
-                Do not reference tools, schemas, or the system.
-                No disclaimers or meta commentary.
-                """
+    print(f"[ASK] ✓ Fetched result {str(result)[:80]} ")
 
-            )},
-            {"role": "user", "content": (
-                f"User query: {user_message}\n\n"
-                f"Study results returned from ClinicalTrials.gov:\n{json.dumps(result, indent=2)}"
-            )}
-        ]
-    )
+    if not result:
+        return jsonify({
+            "response": "No studies matched the criteria.",
+            "raw_data": []
+        })
+
+    '''
+    # [test] parse the csv record from study_fields.csv file
+    result = load_studies_from_csv(
+        "study_fields.csv", filter_condition="Breast Cancer", max_records=10)
+
+    field_names = ['NCTId', 'BriefTitle', 'OverallStatus',
+                   'Condition', 'Phase', 'StudyType', 'StartDate']
+    job_mode = "inline"
+    search_expr = "Breast Cancer AND NOT Chemotherapy"
+    '''
+
+    # ===== STAGE 6: PREPROCESS WITH FIELD NORMALIZATION =====
+    # Normalize field names from CSV (snake_case) to API format (PascalCase)
+    result_normalized = [normalize_field_names(trial) for trial in result]
+    result_shrunken = shrink_trials(
+        result_normalized, field_names, normalize=False)
+    print(
+        f"[ASK] ✓ Normalized {len(result)} studies, shrunk to {len(result_shrunken)} with requested fields")
+
+    # ===== STAGE 7: DECIDE INLINE VS BACKGROUND =====
+    if job_mode == "background" or len(result) > 20:
+        # Enqueue background job and return job_id
+        print(f"[ASK] Enqueueing background summarization job...")
+        try:
+            job = summarize_incrementally.delay(
+                query=search_expr,
+                studies=result_shrunken,
+                fields=field_names or [],
+                model="gpt-4.1"
+            )
+
+            print(f"[ASK] ✓ Job enqueued: {job.id}")
+            return jsonify({
+                "status": "processing",
+                "job_id": str(job.id),
+                "num_studies": len(result),
+                "message": f"Summarizing {len(result)} studies in background..."
+            })
+        except Exception as e:
+            print(
+                f"[ASK] ✗ Failed to enqueue job: {e}. Falling back to inline.")
+            job_mode = "inline"
+
+    # ===== STAGE 8: INLINE SUMMARIZATION (if mode = "inline") =====
+    if job_mode == "inline":
+        print(f"[ASK] Inline summarization...")
+        try:
+            summary = summarize_studies_json(
+                query=search_expr,
+                studies=result_shrunken,
+                model="gpt-4.1",
+            )
+
+            set_cached_summary(search_expr, field_names or [],
+                               "gpt-4.1", summary)
+            print(
+                f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
+        except Exception as e:
+            print(f"[ASK] ✗ Summarization failed: {e}")
+            summary = f"Could not summarize: {str(e)}"
+
+        return jsonify({
+            "response": summary,
+            "raw_data": result,
+            "num_studies": len(result)
+        })
 
     print("#######################################")
     print(f'summary: {str(summary)[:100]}')
     print("#######################################")
 
     return jsonify({
-        "response": summary.choices[0].message.content,
+        "response": summary,
         "raw_data": result
     })
+
+
+@app.get("/status")
+def status():
+    return jsonify({"status": "active!!!"})
+
+
+@app.get("/job_status")
+def job_status():
+    """
+    Poll for background job status.
+
+    GET /status?job_id=<job_id>
+
+    Returns:
+        {
+            "status": "processing" | "done" | "error",
+            "result": <summary_string>,  # only if done
+            "error": <error_message>,    # only if error
+            "chunks_processed": <int>    # only if done
+        }
+    """
+    from core.tasks import summarize_incrementally
+
+    job_id = request.args.get("job_id")
+    if not job_id:
+        return jsonify({"error": "Missing job_id parameter"}), 400
+
+    try:
+        result = summarize_incrementally.AsyncResult(job_id)
+
+        if result.state == "PENDING":
+            return jsonify({"status": "processing"})
+        elif result.state == "SUCCESS":
+            return jsonify({
+                "status": "done",
+                "result": result.result
+            })
+        elif result.state == "FAILURE":
+            return jsonify({
+                "status": "error",
+                "error": str(result.info)
+            })
+        else:
+            return jsonify({"status": result.state})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.get("/cache_inspect")
+def cache_inspect():
+    from core.cache import cache_stats
+    stats = cache_stats()
+    return jsonify(stats)
 
 
 if __name__ == "__main__":
