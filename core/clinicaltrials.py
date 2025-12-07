@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Tuple, Optional
 import requests
 import pandas as pd
 from requests.exceptions import RequestException
-
+from core.preprocessor import normalize_full_study_fields
 
 API_URL = "https://clinicaltrials.gov/api/v2/studies"
 
@@ -15,17 +15,29 @@ ct = ClinicalTrials()
 
 
 def run_full_studies(search_expr: str, max_studies: int = 50):
-    full_studies = ct.get_full_studies(
-        search_expr=search_expr, max_studies=max_studies)
 
-    print("#######################################")
-    print(f'full_studies func: {str(full_studies)[:100]}')
-    print("#######################################")
+    try:
+        full_studies = ct.get_full_studies(
+            search_expr=search_expr, max_studies=max_studies)
 
-    df = pd.DataFrame.from_records(full_studies[1:], columns=full_studies[0])
-    df.to_csv("full_studies.csv", index=False)
+        print("#######################################")
+        print(f'full_studies func: len {len(full_studies)}')
+        print("#######################################")
 
-    return df.to_dict(orient="records")
+        col = full_studies[0]
+        if len(full_studies) > 1:
+            col = normalize_full_study_fields(col)
+        # print(f'full_studies func: {str(full_studies)[:700]}')
+
+        df = pd.DataFrame.from_records(
+            full_studies[1:], columns=col)
+        df.to_csv("full_studies.csv", index=False)
+
+        return df.to_dict(orient="records")
+
+    except Exception as e:
+        print(f"[full studies] Error fetching full studies: {e}")
+        return []
 
 
 def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt: str = "json"):
@@ -41,11 +53,14 @@ def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt
     :param fmt: Description
     :type fmt: str
     '''
+
     search_expr = search_expr.replace(" ", "+")
+    cleaned_fields = clean_fields(fields)
+    print(f'[cleaned fields] {cleaned_fields}')
 
     results = ct.get_study_fields(
         search_expr=search_expr,
-        fields=clean_fields(fields),
+        fields=cleaned_fields,
         max_studies=max_studies,
         fmt=fmt,
     )
@@ -54,9 +69,7 @@ def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt
     print(f'results run field function: {str(results)[:100]}...')
     print("#######################################")
 
-    studies = results.get("studies", [])
-
-    parse_results, _ = parse_clinical_studies(studies)
+    parse_results, _ = parse_clinical_studies(results.get("studies", []))
 
     df = pd.DataFrame(parse_results)
 
@@ -77,7 +90,10 @@ def extract_value(protocol_section, study, module_name, field_name, default=""):
 
 
 def clean_fields(fields: List[str]) -> List[str]:
-    """Clean and validate requested fields for study fields retrieval."""
+    """Clean and validate requested fields for study fields retrieval.
+     ["title", "condition", "intervention", "status"]
+
+    """
     VALID_STUDY_FIELDS = [
         "NCTId",
         "BriefTitle",
@@ -86,6 +102,7 @@ def clean_fields(fields: List[str]) -> List[str]:
         "Phase",
         "StudyType",
         "StartDate",
+
         "CompletionDate",
         "LastUpdatePostDate",
         "BriefSummary",

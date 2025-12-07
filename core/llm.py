@@ -15,33 +15,103 @@ _API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
 _client = OpenAI(api_key=_API_KEY) if _API_KEY else None
 
 
-def llm_summarize(trials: List[Dict[str, Any]], query: str, *, model: str = "gpt-4o-mini", temperature: float = 0.4) -> str:
+def summarize_studies_json(
+    query: str,
+    studies: List[Dict[str, Any]],
+    model: str = "gpt-4.1",
+    max_tokens: int = 500,
+    system_prompt: str = None
+) -> str:
+    """
+    Summarize studies using JSON input instead of raw markdown.
+
+    This is more efficient and allows better model reasoning.
+
+    Args:
+        query: user's original query / search expression
+        studies: list of study dicts (already preprocessed)
+        model: which model to use
+        max_tokens: max tokens for response
+        system_prompt: override default system prompt
+
+    Returns:
+        Markdown summary string
+    """
     if not _client:
         return "OpenAI API key not configured. Set OPENAI_API_KEY and retry."
-    if not trials:
-        return "No studies found."
 
-    trial_text = "\n".join([
-        f"- {t['title']} (Phase: {t['phase']}, Status: {t['status']}, Condition: {t['condition']})"
-        for t in trials
-    ])
-    prompt = f"""
-    You are a biomedical research assistant.
-    Summarize these clinical trials for a professional audience.
-    Focus on key patterns (e.g., phases, conditions, and statuses).
+    if not system_prompt:
+        system_prompt = ("""
+        You are a clinical research summarizer. Your job is to transform structured clinical-study data into a concise, accurate **Markdown**.
 
-    User query: {query}
+        ## GENERAL RULES
+        -  Start with a brief **Overview**
+        - Output **Markdown only** (no code fences, no backticks).
+        - **Never invent or infer data.** Only use fields explicitly present.
+        - If a field is missing, empty, or null → **omit it** completely.
+        - Do **not** reference APIs, functions, schemas, or how the data was obtained.
+        - Do **not** add interpretation, analysis, or medical advice.
 
-    Trials:
-    {trial_text}
-    """
+        ## WHEN NO STUDIES MATCH
+        If the studies list is empty:**Return exactly:**  
+        No studies matched the criteria.
 
-    completion = _client.chat.completions.create(
+        ## FORMAT REQUIREMENTS
+        For each study, include only fields that exist in the record:
+        - NCTId  
+        - Title  
+        - Condition(s)  
+        - Phase  
+        - Study Type  
+        - Interventions  
+        - Start Date  
+
+        ## GROUPING & ORGANIZATION
+        - Group studies **logically** (e.g., by Phase, Study Type, or Interventions).  
+        - Within each group, list each study under a bullet section.
+        - Keep entries **compact, factual, and readable**.
+
+        ## STYLE & STRUCTURE
+        - Use short Markdown sections like `### Phase 2`, `### Observational`, etc.
+        - Use bullet points for fields.
+        - Avoid filler words or explanations.
+        - Preserve medically relevant details; avoid verbosity.
+
+        Now summarize the following study data:
+        """
+                         )
+
+    try:
+        completion = _client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "user query": query,
+                        "num_studies": len(studies),
+                        "studies": studies
+                    }, indent=2)
+                }
+            ],
+            # max_tokens=max_tokens,
+            temperature=0.4,
+        )
+        print(f"[LLM] ✓ Summary generated using {str(completion)}")
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error summarizing: {str(e)}"
+
+
+def llm_summarize(trials: List[Dict[str, Any]], query: str, *, model: str = "gpt-4o-mini", temperature: float = 0.4) -> str:
+    """Legacy wrapper — delegates to summarize_studies_json."""
+    return summarize_studies_json(
+        query=query,
+        studies=trials,
         model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
+        max_tokens=800
     )
-    return completion.choices[0].message.content.strip()
 
 
 def refine_query(user_query: str, *, model: str = "gpt-4o-mini", temperature: float = 0.0) -> Dict[str, Any]:
