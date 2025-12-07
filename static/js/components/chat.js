@@ -9,9 +9,8 @@ const ChatComponent = {
 
     const loadMessages = async () => {
       try {
-        // // const data = await API.getMessages(conversation.id);
-        // messages = data.messages || [];
-        messages = conversation.messages || [];
+        const data = await API.getMessages(conversation.id);
+        messages = data.messages || [];
         render();
         scrollToBottom();
       } catch (error) {
@@ -23,15 +22,7 @@ const ChatComponent = {
       if (!content.trim() || isStreaming) return;
 
       try {
-        // const userMessage = await API.sendMessage(conversation.id, content);
-        const userMessage = {
-          id: Date.now().toString(),
-          role: "user",
-          content: content,
-          is_streaming: false,
-          conversation_id: conversation.id,
-        };
-
+        const userMessage = await API.sendMessage(conversation.id, content);
         messages.push(userMessage);
         render();
         scrollToBottom();
@@ -39,11 +30,10 @@ const ChatComponent = {
         const assistantMessage = {
           id: Date.now().toString(),
           role: "assistant",
-          content: "fetching response...",
+          content: "",
           is_streaming: true,
           conversation_id: conversation.id,
         };
-
         messages.push(assistantMessage);
         currentStreamingMessageId = assistantMessage.id;
         isStreaming = true;
@@ -51,21 +41,14 @@ const ChatComponent = {
 
         const responseData = await API.getAssistantResponse(
           conversation.id,
-          userMessage
+          userMessage.id
         );
-
-        console.log("Assistant Response Data:", responseData);
-
         await simulateStreaming(
           assistantMessage.id,
           responseData.response || this.generateResponse(content)
         );
       } catch (error) {
         console.error("Error sending message:", error);
-        alert(`[ChatRoom Error]`);
-        isStreaming = false;
-        currentStreamingMessageId = null;
-        render();
       }
     };
 
@@ -85,7 +68,7 @@ const ChatComponent = {
         }
 
         await new Promise((resolve) =>
-          setTimeout(resolve, 30 + Math.random() * 30)
+          setTimeout(resolve, 30 + Math.random() * 50)
         );
       }
 
@@ -334,18 +317,18 @@ const ChatComponent = {
     if (lowerMessage.includes("tool") || lowerMessage.includes("api")) {
       return `I'll help you with that. Let me use the appropriate tools to gather the information you need.
 
-      **Tool Call: run_study_fields**
-      - search: "${userMessage}"
-      - max_studies: 20
-      - Processing...
+**Tool Call: run_study_fields**
+- search: "${userMessage}"
+- max_studies: 20
+- Processing...
 
-      Based on the tool results, I found several relevant entries. Here's a summary:
+Based on the tool results, I found several relevant entries. Here's a summary:
 
-      1. **First Result**: This shows promising data with a success rate of 78%
-      2. **Second Result**: Additional findings support the initial hypothesis
-      3. **Third Result**: Further analysis reveals interesting patterns
+1. **First Result**: This shows promising data with a success rate of 78%
+2. **Second Result**: Additional findings support the initial hypothesis
+3. **Third Result**: Further analysis reveals interesting patterns
 
-      The data suggests a strong correlation between the variables we examined. Would you like me to dive deeper into any specific aspect?`;
+The data suggests a strong correlation between the variables we examined. Would you like me to dive deeper into any specific aspect?`;
     }
 
     if (
