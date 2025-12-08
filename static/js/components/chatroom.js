@@ -38,26 +38,32 @@ const ChatComponent = {
 
         const assistantMessage = {
           id: Date.now().toString(),
-          role: "assistant",
-          content: "fetching response...",
+          role: "system",
+          content: "",
           is_streaming: true,
           conversation_id: conversation.id,
+          metadata: { is_fetching: true },
         };
 
         messages.push(assistantMessage);
         currentStreamingMessageId = assistantMessage.id;
         isStreaming = true;
         render();
+        this.startSearchIndicator(currentStreamingMessageId);
+        scrollToBottom();
 
         const responseData = await API.getAssistantResponse(
           conversation.id,
           userMessage
         );
-
         console.log("Assistant Response Data:", responseData);
 
+        this.stopSearchIndicator();
+        updateMessageRoleAndFetchingStatus("assistant", false);
+        render();
+
         await simulateStreaming(
-          assistantMessage.id,
+          currentStreamingMessageId,
           responseData.response || this.generateResponse(content)
         );
       } catch (error) {
@@ -66,10 +72,23 @@ const ChatComponent = {
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
+      } finally {
+        this.stopSearchIndicator();
+      }
+    };
+
+    const updateMessageRoleAndFetchingStatus = (role, fetchStatus) => {
+      const messageIndex = messages.findIndex(
+        (m) => m.id === currentStreamingMessageId
+      );
+      if (messageIndex !== -1) {
+        messages[messageIndex].role = role; // Switch role to show content
+        messages[messageIndex].metadata.is_fetching = fetchStatus;
       }
     };
 
     const simulateStreaming = async (messageId, responseText) => {
+      console.log("Simulating streaming for message ID:", messageId);
       const words = responseText.split(" ");
       let accumulated = "";
 
@@ -105,6 +124,12 @@ const ChatComponent = {
     };
 
     const updateMessageDisplay = (messageId, content) => {
+      // const contentEl = document.getElementById(`content-${messageId}`);
+      // if (contentEl) {
+      //   contentEl.innerHTML = MarkdownParser.parse(content);
+      //   return;
+      // }
+
       const messageEl = chatView.querySelector(
         `[data-message-id="${messageId}"] .message-content`
       );
@@ -124,7 +149,10 @@ const ChatComponent = {
 
     const renderMessage = (message) => {
       const isUser = message.role === "user";
-      const isSystem = message.role === "system";
+      const isSystem =
+        message.role === "system" || message.role === "assistant";
+      const isFetching = message.metadata?.is_fetching;
+      console.log("Rendering message:", message, { isFetching });
 
       if (message.metadata && message.metadata.tool_call) {
         return this.renderToolCallMessage(message);
@@ -151,11 +179,21 @@ const ChatComponent = {
               : ""
           }
           <div class="message-bubble">
-            <div class="message-content">${MarkdownParser.parse(
-              message.content
-            )}</div>
+          ${
+            !isUser && isFetching
+              ? `<div id="search-status-${message.id}" class="search-status">
+                <span id="search-text-${message.id}">
+                  Searching
+                </span>
+                <span id="search-dots-${message.id}"></span>
+              </div>`
+              : `<div class="message-content" id="content-${message.id}">
+                ${MarkdownParser.parse(message.content)}
+              </div>`
+          }
+            
             ${
-              !isUser && !message.is_streaming
+              !isUser && !message.is_streaming && !isFetching
                 ? `
               <div class="message-actions">
                 <button class="action-btn" title="Copy" onclick="ChatComponent.copyMessage(this)">
@@ -326,6 +364,61 @@ const ChatComponent = {
         </div>
       </div>
     `;
+  },
+
+  dotInterval: null,
+  messageInterval: null,
+
+  statusMessages: [
+    "Searching database",
+    "Fetching clinical trials",
+    "Filtering studies",
+    "Analyzing results",
+    "Summarizing findings",
+  ],
+
+  startSearchIndicator(currentMessageId) {
+    if (!currentMessageId) return;
+
+    const statusEl = document.getElementById(
+      `search-status-${currentMessageId}`
+    );
+    const textEl = document.getElementById(`search-text-${currentMessageId}`);
+    const dotsEl = document.getElementById(`search-dots-${currentMessageId}`);
+    console.log("search indicator {}", currentMessageId);
+
+    if (!statusEl) return;
+
+    statusEl.classList.remove("hidden");
+    textEl.textContent = this.statusMessages[0];
+    dotsEl.textContent = "";
+
+    let dotCount = 0;
+    this.dotInterval = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      dotsEl.textContent = ".".repeat(dotCount);
+    }, 450);
+
+    let messageIndex = 1;
+    this.messageInterval = setInterval(() => {
+      if (messageIndex < this.statusMessages.length) {
+        textEl.textContent = this.statusMessages[messageIndex];
+        messageIndex++;
+      } else {
+        messageIndex = 0;
+        textEl.textContent = this.statusMessages[messageIndex];
+      }
+    }, 2500);
+  },
+
+  stopSearchIndicator() {
+    clearInterval(this.dotInterval);
+    clearInterval(this.messageInterval);
+
+    const statusEl = document.getElementById("search-status");
+    if (statusEl) {
+      statusEl.classList.add("hidden");
+    }
   },
 
   generateResponse(userMessage) {

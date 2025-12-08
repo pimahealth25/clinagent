@@ -15,7 +15,8 @@
   --shadow-lg: rgba(0, 0, 0, 0.12);
 
   --text-size-multiplier: 1;
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
   --animation-duration: 0.3s;
 }
 
@@ -65,7 +66,8 @@ body {
   color: var(--text-primary);
   font-size: calc(16px * var(--text-size-multiplier));
   line-height: 1.5;
-  transition: background var(--animation-duration), color var(--animation-duration);
+  transition: background var(--animation-duration),
+    color var(--animation-duration);
 }
 
 .auth-container {
@@ -73,7 +75,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--secondary-bg) 0%, var(--primary-bg) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--secondary-bg) 0%,
+    var(--primary-bg) 100%
+  );
   padding: 20px;
 }
 
@@ -252,6 +258,58 @@ body {
 .search-input:focus {
   outline: none;
   border-color: var(--accent-color);
+}
+
+/* Status indicator styling */
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 8px;
+  color: #3b82f6;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.search-status span {
+  font-weight: 500;
+}
+
+/* Pulsing animation for status */
+@keyframes pulse-status {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.search-status {
+  animation: pulse-status 2s ease-in-out infinite;
+}
+
+/* Transition between status and content */
+.message.fetching {
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+/* Content streaming animation */
+.message-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .conversations-list {
@@ -579,7 +637,7 @@ body {
   background: var(--code-bg);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
   font-size: calc(14px * var(--text-size-multiplier));
   border: 1px solid var(--border-color);
 }
@@ -630,7 +688,7 @@ body {
 }
 
 .code-block-wrapper code {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
   font-size: calc(14px * var(--text-size-multiplier));
   line-height: 1.5;
   color: var(--text-primary);
@@ -753,7 +811,9 @@ body {
 }
 
 @keyframes thinking {
-  0%, 60%, 100% {
+  0%,
+  60%,
+  100% {
     transform: scale(1);
     opacity: 0.5;
   }
