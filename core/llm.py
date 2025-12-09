@@ -13,12 +13,15 @@ load_dotenv()
 # Prefer OPENAI_API_KEY; fallback to OPEN_AI_KEY
 _API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
 _client = OpenAI(api_key=_API_KEY) if _API_KEY else None
+_CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
+    "CHUNK_SUMMARIZER_MODEL") or "gpt-3.5-turbo"
+_GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
 
 
 def summarize_studies_json(
     query: str,
     studies: List[Dict[str, Any]],
-    model: str = "gpt-4.1",
+    model: str = "gpt-4.1-mini",
     max_tokens: int = 500,
     system_prompt: str = None
 ) -> str:
@@ -87,7 +90,7 @@ def summarize_studies_json(
         return f"Error summarizing: {str(e)}"
 
 
-def llm_summarize(trials: List[Dict[str, Any]], query: str, *, model: str = "gpt-4o-mini", temperature: float = 0.4) -> str:
+def llm_summarize(trials: List[Dict[str, Any]], query: str, *, model: str = "gpt-4.1-mini", temperature: float = 0.4) -> str:
     """Legacy wrapper — delegates to summarize_studies_json."""
     return summarize_studies_json(
         query=query,
@@ -97,7 +100,7 @@ def llm_summarize(trials: List[Dict[str, Any]], query: str, *, model: str = "gpt
     )
 
 
-def refine_query(user_query: str, *, model: str = "gpt-4o-mini", temperature: float = 0.0) -> Dict[str, Any]:
+def refine_query(user_query: str, *, model: str = "gpt-4.1-mini", temperature: float = 0.0) -> Dict[str, Any]:
     """Use the LLM to rewrite the user's query into a better API search term and optional filters.
 
     Returns dict: {"refined_query": str, "filters": {"phase": str, "status": str, "condition": str}}
@@ -150,26 +153,3 @@ def refine_query(user_query: str, *, model: str = "gpt-4o-mini", temperature: fl
         return {"refined_query": refined, "filters": filters}
     except Exception:
         return {"refined_query": user_query, "filters": {}}
-
-
-def ask_with_mcp(user_message: str, *, model: str = "gpt-4o-mini", temperature: float = 0.0) -> str:
-    """Send a plain-English user message to the LLM and return the model reply.
-
-    Important: for MCP/tool usage to work the model you call here must have the
-    MCP/tools configured server-side (on the OpenAI/ChatGPT side). If the model
-    has the clinicaltrials MCP tool available, the model will automatically
-    select and call it when appropriate. No special client-side JSON tooling is
-    required — just pass the user's text as-is.
-
-    This helper is a minimal convenience wrapper to call the same chat API used
-    elsewhere in this module.
-    """
-    if not _client:
-        return "OpenAI API key not configured. Set OPENAI_API_KEY and retry."
-
-    completion = _client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": user_message}],
-        temperature=temperature,
-    )
-    return completion.choices[0].message.content.strip()
