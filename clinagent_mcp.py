@@ -7,11 +7,16 @@ from core.clinicaltrials import run_full_studies, run_study_fields
 from core.preprocessor import resolve_field_set, shrink_trials, load_studies_from_csv
 from core.preprocessor import normalize_field_names
 from core.tasks import summarize_incrementally
-from core.cache import get_cached_summary, get_cached_raw, set_cached_raw, set_cached_summary, clear_all_caches
+from core.cache import get_cached_summary, get_cached_raw, set_cached_raw, set_cached_summary, clear_all_caches, redis_client
 from core.llm import summarize_studies_json
 
 load_dotenv()
-client = OpenAI()
+_CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
+    "CHUNK_SUMMARIZER_MODEL") or "gpt-3.5-turbo"
+_GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
+client = OpenAI(api_key=_OPENAI_API_KEY) if _OPENAI_API_KEY else None
+
 # clear_all_caches()
 
 app = Flask(__name__, static_url_path="", static_folder="static")
@@ -59,7 +64,6 @@ TOOLS = [
 @app.get("/")
 def index():
     return render_template("demo.html")
-    # return app.send_static_file("demo.html")
 
 
 @app.post("/ask")
@@ -71,7 +75,6 @@ def ask():
     ser input: {'id': '1764632899771', 'role': 'user',
     'content': "2 trials on breast cancer that doesn't involve chemotherapy", 'is_streaming': False, 'conversation_id': 2}
     '''
-    # user_message = request.json.get("message", "")
     query = request.json.get("message", "")
     user_message = query.get("content", "") if isinstance(
         query, dict) else str(query)
@@ -81,7 +84,7 @@ def ask():
     # ===== STAGE 1: GENERATE SEARCH EXPRESSION =====
     try:
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model=_GENERAL_OPENAI_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -158,7 +161,7 @@ def ask():
 
     # ===== STAGE 3: CHECK CACHE FOR SUMMARY =====
     cached_summary = get_cached_summary(
-        search_expr, field_names or [], "gpt-4.1")
+        search_expr, field_names or [], _GENERAL_OPENAI_MODEL)
 
     if cached_summary:
         print("[ASK] ✓ CACHE HIT: summary found")
@@ -235,7 +238,7 @@ def ask():
                 query=search_expr,
                 studies=result_shrunken,
                 fields=field_names or [],
-                model="gpt-4.1"
+                model=_GENERAL_OPENAI_MODEL
             )
 
             print(f"[ASK] ✓ Job enqueued: {job.id}")
@@ -257,11 +260,11 @@ def ask():
             summary = summarize_studies_json(
                 query=search_expr,
                 studies=result_shrunken,
-                model="gpt-4.1",
+                model=_GENERAL_OPENAI_MODEL,
             )
 
             set_cached_summary(search_expr, field_names or [],
-                               "gpt-4.1", summary)
+                               _GENERAL_OPENAI_MODEL, summary)
             print(
                 f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
         except Exception as e:
@@ -289,46 +292,59 @@ def status():
     return jsonify({"status": "active!!!"})
 
 
-@app.get("/job_status")
-def job_status():
-    """
-    Poll for background job status.
+# @app.get("/all_job_status")
+# def all_jobs_status():
+#     """
+#     Poll for background job status.
 
-    GET /status?job_id=<job_id>
+#     GET /status?job_id=<job_id>
 
-    Returns:
-        {
-            "status": "processing" | "done" | "error",
-            "result": <summary_string>,  # only if done
-            "error": <error_message>,    # only if error
-            "chunks_processed": <int>    # only if done
-        }
-    """
-    from core.tasks import summarize_incrementally
+#     Returns:
+#         {
+#             "status": "processing" | "done" | "error",
+#             "result": <summary_string>,  # only if done
+#             "error": <error_message>,    # only if error
+#             "chunks_processed": <int>    # only if done
+#         }
+#     """
+#     from core.tasks import summarize_incrementally
 
-    job_id = request.args.get("job_id")
-    if not job_id:
-        return jsonify({"error": "Missing job_id parameter"}), 400
+#     job_id = request.args.get("job_id")
+#     if not job_id:
+#         return jsonify({"error": "Missing job_id parameter"}), 400
 
-    try:
-        result = summarize_incrementally.AsyncResult(job_id)
+#     try:
+#         result = summarize_incrementally.AsyncResult(job_id)
 
-        if result.state == "PENDING":
-            return jsonify({"status": "processing"})
-        elif result.state == "SUCCESS":
-            return jsonify({
-                "status": "done",
-                "result": result.result
-            })
-        elif result.state == "FAILURE":
-            return jsonify({
-                "status": "error",
-                "error": str(result.info)
-            })
-        else:
-            return jsonify({"status": result.state})
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+#         if result.state == "PENDING":
+#             return jsonify({"status": "processing"})
+#         elif result.state == "SUCCESS":
+#             return jsonify({
+#                 "status": "done",
+#                 "result": result.result
+#             })
+#         elif result.state == "FAILURE":
+#             return jsonify({
+#                 "status": "error",
+#                 "error": str(result.info)
+#             })
+#         else:
+#             return jsonify({"status": result.state})
+#     except Exception as e:
+#         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/job/<job_id>/status")
+def job_status(job_id):
+    '''{
+    "job_id": "029c71f5-0f6e-4b09-8e68-3f0b9584cdde",
+    "message": "Summarizing 50 studies in background...",
+    "num_studies": 50,
+    "status": "processing"
+}
+'''
+    meta = redis_client.hgetall(f"job:{job_id}:meta")
+    return jsonify(meta)
 
 
 @app.get("/cache_inspect")
