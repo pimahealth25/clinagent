@@ -88,7 +88,6 @@ const ChatComponent = {
     };
 
     const simulateStreaming = async (messageId, responseText) => {
-      console.log("Simulating streaming for message ID:", messageId);
       const words = responseText.split(" ");
       let accumulated = "";
 
@@ -124,12 +123,6 @@ const ChatComponent = {
     };
 
     const updateMessageDisplay = (messageId, content) => {
-      // const contentEl = document.getElementById(`content-${messageId}`);
-      // if (contentEl) {
-      //   contentEl.innerHTML = MarkdownParser.parse(content);
-      //   return;
-      // }
-
       const messageEl = chatView.querySelector(
         `[data-message-id="${messageId}"] .message-content`
       );
@@ -152,7 +145,6 @@ const ChatComponent = {
       const isSystem =
         message.role === "system" || message.role === "assistant";
       const isFetching = message.metadata?.is_fetching;
-      console.log("Rendering message:", message, { isFetching });
 
       if (message.metadata && message.metadata.tool_call) {
         return this.renderToolCallMessage(message);
@@ -385,7 +377,6 @@ const ChatComponent = {
     );
     const textEl = document.getElementById(`search-text-${currentMessageId}`);
     const dotsEl = document.getElementById(`search-dots-${currentMessageId}`);
-    console.log("search indicator {}", currentMessageId);
 
     if (!statusEl) return;
 
@@ -502,6 +493,7 @@ Is there anything specific you'd like me to elaborate on?`;
     const messageContent = button
       .closest(".message-bubble")
       .querySelector(".message-content");
+
     const text = messageContent.innerText;
     navigator.clipboard.writeText(text).then(() => {
       button.innerHTML = "✓";
