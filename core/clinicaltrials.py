@@ -3,13 +3,16 @@ from pytrials.client import ClinicalTrials
 
 import re
 from typing import List, Dict, Any, Tuple, Optional
-
+from dotenv import load_dotenv
+import os
 import requests
 import pandas as pd
 from requests.exceptions import RequestException
 from core.preprocessor import normalize_full_study_fields
 
-API_URL = "https://clinicaltrials.gov/api/v2/studies"
+load_dotenv()
+# "https://clinicaltrials.gov/api/v2/studies"
+API_URL = os.getenv("CLINICAL_TRIAL_URL")
 
 ct = ClinicalTrials()
 
@@ -31,7 +34,7 @@ def run_full_studies(search_expr: str, max_studies: int = 50):
 
         df = pd.DataFrame.from_records(
             full_studies[1:], columns=col)
-        df.to_csv("full_studies.csv", index=False)
+        df.to_csv("guides/full_studies.csv", index=False)
 
         return df.to_dict(orient="records")
 
@@ -74,7 +77,7 @@ def run_study_fields(search_expr: str, fields: list, max_studies: int = 100, fmt
     df = pd.DataFrame(parse_results)
 
     # Optional export
-    df.to_csv("study_fields.csv", index=False)
+    df.to_csv("guides/study_fields.csv", index=False)
 
     return df.to_dict(orient="records")
 

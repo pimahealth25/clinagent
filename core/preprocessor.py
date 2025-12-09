@@ -3,6 +3,9 @@ Data preprocessing module for clinical trials.
 
 Extracts and filters essential fields to reduce LLM processing overhead.
 Supports configurable field sets: essential, extended, full.
+
+start docker and run on another terminal > docker run -p 6379:6379 --name redis-clinagent -d redis:7
+
 """
 
 from __future__ import annotations
@@ -160,7 +163,7 @@ def shrink_trials(
         df = pd.DataFrame(shrinked)
         print(
             f"[PREPROCESS] ✓ Shrunk {len(shrinked)} studies to {len(df.columns)} fields.")
-        df.to_csv("shrink_fields.csv", index=False)
+        df.to_csv("guides/shrink_fields.csv", index=False)
     else:
         print(f"[PREPROCESS] ✗ No fields matched after shrinking!")
 
