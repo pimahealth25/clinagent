@@ -1,16 +1,28 @@
 """
 Background task queue for incremental summarization.
 Uses Celery + Redis as broker (optional; gracefully degrades).
-
+celery -A your_module_name worker --loglevel=info
 Tasks:
-  - summarize_incrementally: Chunk studies and summarize incrementally
+  - summarize_chunk: Chunk studies and summarize incrementally
+    - aggregate_chunks: Combine chunk summaries into final summary
+    - orchestrate_task: Orchestrate chunking, summarization, aggregation
+
 """
 
 import json
+import os
+import logging
 from typing import List, Dict, Any
+from dotenv import load_dotenv
+from core.llm import summarize_studies_json
+from core.pipeline import (chunk_studies, validate_chunk_config)
+from core.cache import get_cached_summary, set_cached_summary, get_cached_chunk_summary, set_cached_chunk_summary, set_job_status
+load_dotenv()
+
+logger = logging.getLogger("celery.task")
 
 try:
-    from celery import Celery, Task
+    from celery import Celery, group, chain
     CELERY_AVAILABLE = True
 except ImportError:
     CELERY_AVAILABLE = False
@@ -82,6 +94,199 @@ def _summarize_sync(
 
 if CELERY_AVAILABLE and celery_app:
 
+    @celery_app.task(bind=True, name="core.tasks.summarize_chunk")
+    def summarize_chunk(
+        self, job_id: str, chunk_index: int, chunk_data: List[Dict[str, Any]],
+        query: str, field_names: List[str], total_chunks: int, model: str = "gpt-4.1-mini"
+    ) -> Dict[str, Any]:
+
+        logger.info(
+            f"[TASK] Summarizing chunk {chunk_index} of job {job_id}...")
+
+        try:
+            summary = summarize_studies_json(
+                query=query, studies=chunk_data, model=model,
+            )
+            logger.info(f"[TASK] Chunk {chunk_index} summary generated")
+            set_cached_chunk_summary(query=query, fields=field_names or [],
+                                     model=model, chunk_index=chunk_index, chunk_summary=summary)
+            set_job_status(
+                job_id=job_id,
+                status="processing",
+                chunk_completed=chunk_index+1,
+                total_chunks=total_chunks,
+            )
+
+            logger.info(
+                f"[TASK] ✓ Chunk {chunk_index} / {total_chunks} of job {job_id} completed and cached")
+
+            return {
+                "status": "done",
+                "chunk_index": chunk_index,
+                "summary": summary[:100]
+            }
+
+        except Exception as e:
+            logger.error(
+                f"[TASK] ✗ chunk {chunk_index} / {total_chunks} of job {job_id} failed: {e}")
+
+            return {
+                "status": "error",
+                "chunk_index": chunk_index,
+                "error": str(e)
+            }
+
+    @celery_app.task(name="core.tasks.aggregate_chunks")
+    def aggregate_chunks(job_id: str, total_chunks: int, query: str, field_names: List[str], model_chunk: str = "gpt-4.1-mini", model_aggregate: str = "gpt-4.1-mini") -> Dict[str, Any]:
+        """
+         Aggregate all chunk summaries into a final summary.
+
+         Args:
+             job_id: The pipeline job ID
+             total_chunks: Total number of chunks
+             query: Original search query
+             field_names: Fields included
+             model_aggregate: Fast model for aggregation
+
+         Returns:
+             Final aggregated summary
+
+         Behavior:
+             - Retrieves all chunk summaries from cache
+             - Combines them with fast model
+             - Stores final result in cache
+             - Returns to user via job polling
+         """
+        logger.info(
+            f"[TASK] Aggregating {total_chunks} chunks for job {job_id}...")
+        try:
+            chunk_summaries = []
+            for i in range(total_chunks):
+                data = get_cached_chunk_summary(query=query, fields=field_names or [],
+                                                model=model_chunk, chunk_index=i)
+                if not data:
+                    raise ValueError(
+                        f"Missing chunk summary for chunk {i} in job {job_id}")
+                chunk_summaries.append(data)
+
+            if not chunk_summaries:
+                raise ValueError("No chunk summaries was found to aggregate")
+
+            final_sys_prompt = """
+            You are summarizing clinical trial search results.
+
+            Below are summaries of trial chunks. Combine them into a single,
+            coherent markdown summary that:
+            1. Eliminates redundancy
+            2. Preserves key findings from all chunks
+            3. Organizes by trial status/phase
+            4. Includes practical insights for the user
+            5. Keeps format professional and scannable
+
+            CHUNK SUMMARIES TO COMBINE
+
+            OUTPUT: Single cohesive markdown summary
+            """
+
+            final_summary = summarize_studies_json(
+                query=query, studies=chunk_summaries, model=model_aggregate, system_prompt=final_sys_prompt)
+
+            set_cached_summary(query=query, fields=field_names,
+                               model=model_aggregate, summary=final_summary)
+            set_job_status(
+                job_id=job_id,
+                status="done",
+                chunk_completed=total_chunks,
+                total_chunks=total_chunks,
+                summary=final_summary,
+            )
+            logger.info(f"[TASK] ✓ Aggregation complete for job {job_id}")
+
+            return {
+                "status": "done",
+                "job_id": job_id,
+                "summary": final_summary
+            }
+
+        except Exception as e:
+            logger.error(f"[TASK] ✗ Aggregation failed: {e}")
+
+            set_job_status(
+                job_id=job_id,
+                status="error",
+                chunk_completed=total_chunks,
+                total_chunks=total_chunks,
+                summary=final_summary,
+            )
+
+            return {
+                "status": "error",
+                "job_id": job_id,
+                "error": str(e)
+            }
+
+    @celery_app.task(name="core.task.orchestrate_task")
+    def orchestrate_task(
+        job_id: str,
+        query: str,
+        studies: List[Dict[str, Any]],
+        field_names: List[str],
+        chunk_size: int = 5,
+        model_chunk: str = "gpt-4.1-min",
+        model_aggregate: str = "gpt-4.1-mini"
+    ) -> str:
+        """
+        Orchestrate the entire pipeline: chunk → summarize → aggregate.
+
+        Args:
+            job_id: Unique job identifier
+            query: Search query
+            studies: All studies to process
+            field_names: Fields to include
+            chunk_size: Studies per chunk
+            model_summarize: Model for chunk summaries
+            model_aggregate: Model for final aggregation
+
+        Returns:
+            Job ID for user to poll
+
+        Behavior:
+            1. Chunk the studies
+            2. Enqueue chunk summarization tasks (parallel)
+            3. Enqueue aggregation task (after all chunks)
+            4. Return job_id to user immediately
+        """
+
+        logger.info(f"[ORCHESTRATOR] Starting pipeline for job {job_id}...")
+
+        # chunk the studies
+        chunks = chunk_studies(studies=studies, chunk_size=chunk_size)
+        config = validate_chunk_config(len(studies), chunk_size)
+
+        # create chunk summarization tasks
+        chunk_tasks = [
+            summarize_chunk.s(job_id=job_id, chunk_index=i, chunk_data=chunk, query=query,
+                              field_names=field_names, model=model_chunk, total_chunks=len(chunks)) for i, chunk in enumerate(chunks)]
+
+        # create workflow for running all chunk summarizer and aggregate summarizer
+        # group() runs tasks in parallel
+        # chain() runs sequentially after group completes
+        workflow = chain(
+            group(*chunk_tasks),
+            aggregate_chunks.s(job_id=job_id, total_chunks=len(chunks), query=query,
+                               field_names=field_names, model_chunk=model_chunk, model_aggregate=model_aggregate)
+        )
+
+        result = workflow.apply_async()
+
+        logger.info(
+            f"[ORCHESTRATION] pipeline enqueued with task ID {result.id}")
+        logger.info(
+            f"[ORCHESTRATION] Expected to complete in {config['estimated_time_parallel']}")
+
+        return job_id
+
+    '''
     @celery_app.task(bind=True, name="core.tasks.summarize_incrementally")
     def summarize_incrementally(
         self,
@@ -114,7 +319,7 @@ if CELERY_AVAILABLE and celery_app:
             set_cached_summary(query, fields, model, summary)
             return {"status": "done", "summary": summary, "chunks_processed": 0}
 
-        print(
+        logger.info(
             f"\n[Task {self.request.id}] Summarizing {len(studies)} studies (model={model})...")
 
         # ===== STAGE 1: CHUNK & SUMMARIZE CHUNKS =====
@@ -122,7 +327,7 @@ if CELERY_AVAILABLE and celery_app:
                   for i in range(0, len(studies), CHUNK_SIZE)]
         chunk_summaries = []
 
-        print(
+        logger.info(
             f"[Task {self.request.id}] Stage 1: Processing {len(chunks)} chunks of {CHUNK_SIZE}...")
 
         for idx, chunk in enumerate(chunks, 1):
@@ -195,6 +400,8 @@ if CELERY_AVAILABLE and celery_app:
             "chunks_processed": len(chunks)
         }
 
+
+    '''
 else:
     # Celery not available; create a dummy task
     def summarize_incrementally(
@@ -268,43 +475,3 @@ def submit_summarization_job(
         "mode": "sync",
         "error": result.get("error")
     }
-
-
-def get_job_status(job_id: str) -> Dict[str, Any]:
-    """
-    Get status of a submitted job.
-
-    Args:
-        job_id: job ID returned from submit_summarization_job
-
-    Returns:
-        dict with status ("processing", "done", "error") and result
-    """
-    if not CELERY_AVAILABLE or not celery_app:
-        return {"status": "error", "error": "Celery not available"}
-
-    try:
-        from celery.result import AsyncResult
-        result = AsyncResult(job_id, app=celery_app)
-
-        if result.state == "PENDING":
-            return {"status": "processing"}
-        elif result.state == "SUCCESS":
-            return {
-                "status": "done",
-                "result": result.result
-            }
-        elif result.state == "FAILURE":
-            return {
-                "status": "error",
-                "error": str(result.info)
-            }
-        elif result.state == "PROGRESS":
-            return {
-                "status": "processing",
-                "progress": result.info
-            }
-        else:
-            return {"status": result.state}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}

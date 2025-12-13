@@ -1,0 +1,221 @@
+[2025-12-13 09:49:11,105: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py:1022: UserWarning: Soft timeouts are not supported: on this platform: It does not have the SIGUSR1 signal.
+  warnings.warn(UserWarning(
+
+[2025-12-13 09:49:11,386: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\celery\worker\consumer\consumer.py:507: CPendingDeprecationWarning: The broker_connection_retry configuration setting will no longer determine
+whether broker connection retries are made during startup in Celery 6.0 and above.
+If you wish to retain the existing behavior for retrying connections on startup,
+you should set broker_connection_retry_on_startup to True.
+  warnings.warn(
+
+[2025-12-13 09:49:12,232: INFO/SpawnPoolWorker-1] child process 27344 calling self.run()
+[2025-12-13 09:49:12,264: INFO/SpawnPoolWorker-4] child process 15260 calling self.run()
+[2025-12-13 09:49:12,290: INFO/SpawnPoolWorker-3] child process 132 calling self.run()
+[2025-12-13 09:49:15,797: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 2.00 seconds... (1/100)
+
+[2025-12-13 09:49:22,092: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 4.00 seconds... (2/100)
+
+[2025-12-13 09:49:30,188: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 6.00 seconds... (3/100)
+
+[2025-12-13 09:49:40,249: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 8.00 seconds... (4/100)
+
+[2025-12-13 09:49:52,702: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 10.00 seconds... (5/100)
+
+[2025-12-13 09:50:06,805: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 12.00 seconds... (6/100)
+
+[2025-12-13 09:50:22,892: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 14.00 seconds... (7/100)
+
+[2025-12-13 09:50:41,080: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 16.00 seconds... (8/100)
+
+[2025-12-13 09:51:01,237: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 18.00 seconds... (9/100)
+
+[2025-12-13 09:51:23,586: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 20.00 seconds... (10/100)
+
+[2025-12-13 09:51:47,689: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 22.00 seconds... (11/100)
+
+[2025-12-13 09:52:14,430: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 24.00 seconds... (12/100)
+
+[2025-12-13 09:52:42,866: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 26.00 seconds... (13/100)
+
+[2025-12-13 09:53:12,953: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 28.00 seconds... (14/100)
+
+[2025-12-13 09:53:45,027: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 30.00 seconds... (15/100)
+
+[2025-12-13 09:54:19,129: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 09:54:55,185: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 09:55:31,253: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 09:56:07,322: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 09:56:43,393: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 09:57:19,497: ERROR/MainProcess] consumer: Cannot connect to redis://localhost:6379/0: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it..
+Trying again in 32.00 seconds... (16/100)
+
+[2025-12-13 10:02:54,396: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py:1022: UserWarning: Soft timeouts are not supported: on this platform: It does not have the SIGUSR1 signal.
+  warnings.warn(UserWarning(
+
+[2025-12-13 10:02:55,051: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\celery\worker\consumer\consumer.py:507: CPendingDeprecationWarning: The broker_connection_retry configuration setting will no longer determine
+whether broker connection retries are made during startup in Celery 6.0 and above.
+If you wish to retain the existing behavior for retrying connections on startup,
+you should set broker_connection_retry_on_startup to True.
+  warnings.warn(
+
+[2025-12-13 10:02:55,126: INFO/MainProcess] Connected to redis://localhost:6379/0
+[2025-12-13 10:02:55,130: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\celery\worker\consumer\consumer.py:507: CPendingDeprecationWarning: The broker_connection_retry configuration setting will no longer determine
+whether broker connection retries are made during startup in Celery 6.0 and above.
+If you wish to retain the existing behavior for retrying connections on startup,
+you should set broker_connection_retry_on_startup to True.
+  warnings.warn(
+
+[2025-12-13 10:02:55,159: INFO/MainProcess] mingle: searching for neighbors
+[2025-12-13 10:02:56,004: INFO/SpawnPoolWorker-2] child process 16736 calling self.run()
+[2025-12-13 10:02:56,018: INFO/SpawnPoolWorker-1] child process 19372 calling self.run()
+[2025-12-13 10:02:56,046: INFO/SpawnPoolWorker-3] child process 27372 calling self.run()
+[2025-12-13 10:02:57,175: INFO/SpawnPoolWorker-4] child process 10196 calling self.run()
+[2025-12-13 10:02:58,924: INFO/MainProcess] mingle: all alone
+[2025-12-13 10:02:59,498: INFO/MainProcess] celery@LeeGreen ready.
+[2025-12-13 10:02:59,544: INFO/MainProcess] Task core.tasks.summarize_chunk[4abb77cb-b87e-4aec-ac30-f735c216ef98] received
+[2025-12-13 10:02:59,555: WARNING/MainProcess] C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py:1503: UserWarning: Soft timeouts are not supported: on this platform: It does not have the SIGUSR1 signal.
+  warnings.warn(UserWarning(
+
+[2025-12-13 10:02:59,578: ERROR/SpawnPoolWorker-3] Pool process <billiard.pool.Worker object at 0x000001DE115EF010> error: OSError(9, 'The handle is invalid', None, 6, None)
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\queues.py", line 395, in get_payload
+    return self._reader.recv_bytes()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 240, in recv_bytes
+    buf = self._recv_bytes(maxlength)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 353, in _recv_bytes
+    result = self._get_more_data(ov, maxsize)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 377, in _get_more_data
+    assert left > 0
+           ^^^^^^^^
+AssertionError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 473, in receive
+    ready, req = _receive(1.0)
+                 ^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 445, in _recv
+    return True, loads(get_payload())
+                       ^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\queues.py", line 394, in get_payload
+    with self._rlock:
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\synchronize.py", line 118, in __exit__
+    return self._semlock.__exit__(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [WinError 6] The handle is invalid
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 351, in workloop
+    req = wait_for_job()
+          ^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 480, in receive
+    raise SystemExit(EX_FAILURE)
+SystemExit: 1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 292, in __call__
+    sys.exit(self.workloop(pid=pid))
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 396, in workloop
+    self._ensure_messages_consumed(completed=completed)
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 406, in _ensure_messages_consumed
+    if self.on_ready_counter.value >= completed:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 7, in getvalue
+OSError: [WinError 6] The handle is invalid
+[2025-12-13 10:02:59,578: ERROR/SpawnPoolWorker-3] Pool process <billiard.pool.Worker object at 0x000001DE115EF010> error: OSError(9, 'The handle is invalid', None, 6, None)
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\queues.py", line 395, in get_payload
+    return self._reader.recv_bytes()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 240, in recv_bytes
+    buf = self._recv_bytes(maxlength)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 353, in _recv_bytes
+    result = self._get_more_data(ov, maxsize)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\connection.py", line 377, in _get_more_data
+    assert left > 0
+           ^^^^^^^^
+AssertionError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 473, in receive
+    ready, req = _receive(1.0)
+                 ^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 445, in _recv
+    return True, loads(get_payload())
+                       ^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\queues.py", line 394, in get_payload
+    with self._rlock:
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\synchronize.py", line 118, in __exit__
+    return self._semlock.__exit__(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [WinError 6] The handle is invalid
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 351, in workloop
+    req = wait_for_job()
+          ^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 480, in receive
+    raise SystemExit(EX_FAILURE)
+SystemExit: 1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 292, in __call__
+    sys.exit(self.workloop(pid=pid))
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 396, in workloop
+    self._ensure_messages_consumed(completed=completed)
+  File "C:\Users\DELL Lattitude3420\Desktop\personal_projects\prima\clinagent\myenv\Lib\site-packages\billiard\pool.py", line 406, in _ensure_messages_consumed
+    if self.on_ready_counter.value >= completed:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 7, in getvalue
+OSError: [WinError 6] The handle is invalid
+[2025-12-13 10:02:59,662: INFO/MainProcess] Task core.tasks.summarize_chunk[e82cd8cc-4d66-444d-b8ef-798b38b61acc] received
+[2025-12-13 10:02:59,788: INFO/MainProcess] Task core.tasks.summarize_chunk[67953aa0-2ef2-4321-8a0c-32de881cc9b1] received
+[2025-12-13 10:02:59,822: INFO/MainProcess] Task core.tasks.summarize_chunk[4089efca-9c62-4425-b41f-7398e9e2c9ef] received
+[2025-12-13 10:02:59,846: INFO/MainProcess] Task core.tasks.summarize_chunk[f24a71d7-77d2-44a7-967a-79f78533b15d] received
+[2025-12-13 10:03:00,249: ERROR/MainProcess] Process 'SpawnPoolWorker-3' pid:528 exited with 'exitcode 1'
+[2025-12-13 10:03:00,292: INFO/MainProcess] Task core.tasks.summarize_chunk[f45f772e-b284-49cb-8270-bb58c4f39e4a] received
+[2025-12-13 10:03:00,866: INFO/SpawnPoolWorker-5] child process 24716 calling self.run()
+[2025-12-13 10:30:42,720: ERROR/MainProcess] Process 'SpawnPoolWorker-5' pid:26036 exited with 'exitcode 3221225786'
+[2025-12-13 10:30:43,123: INFO/MainProcess] Task core.tasks.summarize_chunk[8b45859b-74a5-47fa-93f6-f5abdfd120fc] received

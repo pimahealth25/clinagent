@@ -16,6 +16,28 @@ _client = OpenAI(api_key=_API_KEY) if _API_KEY else None
 _CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
     "CHUNK_SUMMARIZER_MODEL") or "gpt-3.5-turbo"
 _GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
+_SYSTEM_PROMPT = (
+    "You are a clinical research summarizer. Transform structured study data into clear, actionable Markdown.\n\n"
+    "## OUTPUT REQUIREMENTS\n"
+    "- Format: Markdown only (no code blocks, no JSON)\n"
+    "- Content: Facts only—never invent or infer\n"
+    "- Completeness: Omit missing/empty fields\n\n"
+    "## STRUCTURE\n"
+    "1. Executive Summary (1-2 sentences)\n"
+    "2. Trials by Phase\n"
+    "3. Trials by Study Type\n"
+    "4. Key Interventions (if 3+ trials share treatments)\n\n"
+    "## FOR EACH TRIAL, INCLUDE ONLY IF PRESENT\n"
+    "- NCTId (link format: [NCTxxxxx](https://clinicaltrials.gov/study/NCTxxxxx))\n"
+    "- Title, Condition(s), Phase, Study Type, Interventions, Status, Start Date\n\n"
+    "## FORMATTING\n"
+    "- Use ### Phase X or ### Study Type as headers\n"
+    "- Use bullet points, 4-6 lines max per trial\n"
+    "- Bold key criteria\n\n"
+    "## EDGE CASES\n"
+    "- Empty list: Return 'No studies matched.'\n"
+    "- 20+ studies: Group by Phase, then Type\n"
+)
 
 
 def summarize_studies_json(
@@ -23,7 +45,7 @@ def summarize_studies_json(
     studies: List[Dict[str, Any]],
     model: str = "gpt-4.1-mini",
     max_tokens: int = 500,
-    system_prompt: str = None
+    system_prompt: str = _SYSTEM_PROMPT
 ) -> str:
     """
     Summarize studies using JSON input instead of raw markdown.
@@ -43,30 +65,6 @@ def summarize_studies_json(
     if not _client:
         return "OpenAI API key not configured. Set OPENAI_API_KEY and retry."
 
-    if not system_prompt:
-        system_prompt = (
-            "You are a clinical research summarizer. Transform structured study data into clear, actionable Markdown.\n\n"
-            "## OUTPUT REQUIREMENTS\n"
-            "- Format: Markdown only (no code blocks, no JSON)\n"
-            "- Content: Facts only—never invent or infer\n"
-            "- Completeness: Omit missing/empty fields\n\n"
-            "## STRUCTURE\n"
-            "1. Executive Summary (1-2 sentences)\n"
-            "2. Trials by Phase\n"
-            "3. Trials by Study Type\n"
-            "4. Key Interventions (if 3+ trials share treatments)\n\n"
-            "## FOR EACH TRIAL, INCLUDE ONLY IF PRESENT\n"
-            "- NCTId (link format: [NCTxxxxx](https://clinicaltrials.gov/study/NCTxxxxx))\n"
-            "- Title, Condition(s), Phase, Study Type, Interventions, Status, Start Date\n\n"
-            "## FORMATTING\n"
-            "- Use ### Phase X or ### Study Type as headers\n"
-            "- Use bullet points, 4-6 lines max per trial\n"
-            "- Bold key criteria\n\n"
-            "## EDGE CASES\n"
-            "- Empty list: Return 'No studies matched.'\n"
-            "- 20+ studies: Group by Phase, then Type\n"
-        )
-
     try:
         completion = _client.chat.completions.create(
             model=model,
@@ -84,7 +82,7 @@ def summarize_studies_json(
             # max_tokens=max_tokens,
             temperature=0.4,
         )
-        print(f"[LLM] ✓ Summary generated using {str(completion)}")
+        print(f"[LLM] ✓ Summary generated using: {str(completion)}")
         return completion.choices[0].message.content.strip()
     except Exception as e:
         return f"Error summarizing: {str(e)}"

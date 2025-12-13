@@ -4,11 +4,13 @@ from dotenv import load_dotenv
 import os
 import json
 from core.clinicaltrials import run_full_studies, run_study_fields
-from core.preprocessor import resolve_field_set, shrink_trials, load_studies_from_csv
-from core.preprocessor import normalize_field_names
-from core.tasks import summarize_incrementally
-from core.cache import get_cached_summary, get_cached_raw, set_cached_raw, set_cached_summary, clear_all_caches, redis_client
+from core.preprocessor import resolve_field_set, shrink_trials, normalize_field_names, load_studies_from_csv
+from core.tasks import orchestrate_task
+from core.cache import (get_cached_summary, get_cached_raw, set_cached_raw,
+                        set_cached_summary, clear_all_caches, get_job_status, get_final_summary, set_job_status, redis_client)
 from core.llm import summarize_studies_json
+from core.utils import generate_job_id, calculate_chunk_progress_percentage
+
 
 load_dotenv()
 _CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
@@ -16,6 +18,8 @@ _CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
 _GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
 client = OpenAI(api_key=_OPENAI_API_KEY) if _OPENAI_API_KEY else None
+_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE")) or 5
+
 
 # clear_all_caches()
 
@@ -230,23 +234,34 @@ def ask():
         f"[ASK] ✓ Normalized {len(result)} studies, shrunk to {len(result_shrunken)} with requested fields")
 
     # ===== STAGE 7: DECIDE INLINE VS BACKGROUND =====
-    if job_mode == "background" or len(result) > 20:
+    if job_mode == "background" or len(result) > 5:
         # Enqueue background job and return job_id
-        print(f"[ASK] Enqueueing background summarization job...")
+        print(f"[ASK] Enqueueing chunked pipeline job...")
+        job_id = generate_job_id(search_expr)
         try:
-            job = summarize_incrementally.delay(
+
+            job = orchestrate_task(
+                job_id=job_id,
                 query=search_expr,
                 studies=result_shrunken,
-                fields=field_names or [],
-                model=_GENERAL_OPENAI_MODEL
+                field_names=field_names or [],
+                chunk_size=_CHUNK_SIZE,
+                model_chunk=_CHUNK_SUMMARIZER_OPENAI_MODEL,
+                model_aggregate=_GENERAL_OPENAI_MODEL
             )
 
-            print(f"[ASK] ✓ Job enqueued: {job.id}")
+            set_job_status(
+                job_id=job_id,
+                status="processing",
+                chunk_completed=0,
+                total_chunks=(len(result_shrunken) +
+                              _CHUNK_SIZE - 1) // _CHUNK_SIZE
+            )
+
+            print(f"[ASK] ✓ Job  {job_id} enqueued: an status initialized...")
             return jsonify({
                 "status": "processing",
-                "job_id": str(job.id),
-                "num_studies": len(result),
-                "message": f"Summarizing {len(result)} studies in background..."
+                "job_id": job_id,
             })
         except Exception as e:
             print(
@@ -255,7 +270,7 @@ def ask():
 
     # ===== STAGE 8: INLINE SUMMARIZATION (if mode = "inline") =====
     if job_mode == "inline":
-        print(f"[ASK] Inline summarization...")
+        print(f"[ASK]  Inline summarization (small dataset)...")
         try:
             summary = summarize_studies_json(
                 query=search_expr,
@@ -267,19 +282,17 @@ def ask():
                                _GENERAL_OPENAI_MODEL, summary)
             print(
                 f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
+
+            return jsonify({
+                "response": summary,
+                "raw_data": result,
+                "num_studies": len(result),
+                "mode": "inline"
+            })
         except Exception as e:
             print(f"[ASK] ✗ Summarization failed: {e}")
             summary = f"Could not summarize: {str(e)}"
-
-        return jsonify({
-            "response": summary,
-            "raw_data": result,
-            "num_studies": len(result)
-        })
-
-    print("#######################################")
-    print(f'summary: {str(summary)[:100]}')
-    print("#######################################")
+            return jsonify({"error": f"Summarization failed: {str(e)}"}), 500
 
     return jsonify({
         "response": summary,
@@ -287,7 +300,7 @@ def ask():
     })
 
 
-@app.get("/status")
+@app.get("/app_status")
 def status():
     return jsonify({"status": "active!!!"})
 
@@ -334,17 +347,52 @@ def status():
 #         return jsonify({"status": "error", "error": str(e)}), 500
 
 
-@app.route("/api/job/<job_id>/status")
-def job_status(job_id):
+@app.get("/job_status")
+def job_status():
     '''{
-    "job_id": "029c71f5-0f6e-4b09-8e68-3f0b9584cdde",
+    "job_id": "job_5f5c965dd686_1765513532351",
     "message": "Summarizing 50 studies in background...",
     "num_studies": 50,
     "status": "processing"
-}
-'''
-    meta = redis_client.hgetall(f"job:{job_id}:meta")
-    return jsonify(meta)
+    }
+    '''
+    job_id = request.args.get("job_id").strip()
+    if not job_id:
+        return jsonify({"error": "Missing Job_id parameter"}), 400
+
+    job_info = get_job_status(job_id)
+    print(f"[job status]: {job_info}")
+
+    if not job_info:
+        return jsonify({"status": "not_found", "job_id": job_id}), 404
+
+    progress_pct = calculate_chunk_progress_percentage(job_info)
+
+    response = {
+        "job_id": job_id,
+        "status": job_info.get("status"),
+        "chunks_completed": job_info.get("chunks_completed", 0),
+        "total_chunks": job_info.get("total_chunks", 0),
+        "progress_pct": round(progress_pct, 1),
+        "updated_at": job_info.get("updated_at")
+    }
+
+    return jsonify(response)
+
+
+@app.get("/final_summary")
+def final_summary():
+
+    job_id = request.args.get("job_id")
+    if not job_id:
+        return jsonify({"error": "Missing job_id"}), 400
+
+    summary = get_final_summary(job_id)
+
+    if not summary:
+        return jsonify({"error": "Summary not found"}), 404
+
+    return jsonify({"job_id": job_id, "summary": summary})
 
 
 @app.get("/cache_inspect")

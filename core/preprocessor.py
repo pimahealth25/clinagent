@@ -149,10 +149,6 @@ def shrink_trials(
 
         # Keep only requested fields
         filtered = {k: v for k, v in trial.items() if k in field_names}
-        # print(f"[DEBUG] Requested fields: {field_names}")
-        # print(f"[DEBUG] Available fields in trial: {list(trial.keys())}")
-        # print(f"[DEBUG] Trial before shrink: {str(trial)[:50]}...")
-        # print(f"[DEBUG] Trial after shrink: {str(filtered)[:50]}...")
 
         # Only add if we got some fields (avoid empty dicts)
         if filtered:
