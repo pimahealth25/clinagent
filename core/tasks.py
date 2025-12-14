@@ -22,7 +22,7 @@ load_dotenv()
 logger = logging.getLogger("celery.task")
 
 try:
-    from celery import Celery, group, chain
+    from celery import Celery, group, chain, chord
     CELERY_AVAILABLE = True
 except ImportError:
     CELERY_AVAILABLE = False
@@ -137,7 +137,7 @@ if CELERY_AVAILABLE and celery_app:
             }
 
     @celery_app.task(name="core.tasks.aggregate_chunks")
-    def aggregate_chunks(job_id: str, total_chunks: int, query: str, field_names: List[str], model_chunk: str = "gpt-4.1-mini", model_aggregate: str = "gpt-4.1-mini") -> Dict[str, Any]:
+    def aggregate_chunks(results, job_id: str, total_chunks: int, query: str, field_names: List[str], model_chunk: str = "gpt-4.1-mini", model_aggregate: str = "gpt-4.1-mini") -> Dict[str, Any]:
         """
          Aggregate all chunk summaries into a final summary.
 
@@ -270,8 +270,8 @@ if CELERY_AVAILABLE and celery_app:
 
         # create workflow for running all chunk summarizer and aggregate summarizer
         # group() runs tasks in parallel
-        # chain() runs sequentially after group completes
-        workflow = chain(
+        # chord() runs callback after group completes
+        workflow = chord(
             group(*chunk_tasks),
             aggregate_chunks.s(job_id=job_id, total_chunks=len(chunks), query=query,
                                field_names=field_names, model_chunk=model_chunk, model_aggregate=model_aggregate)

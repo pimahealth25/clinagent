@@ -19,3 +19,4 @@ myenv/
 .cache/
 node_modules/
 guides/
+celery.log
