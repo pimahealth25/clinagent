@@ -5,6 +5,7 @@ Extracts and filters essential fields to reduce LLM processing overhead.
 Supports configurable field sets: essential, extended, full.
 
 start docker and run on another terminal > docker run -p 6379:6379 --name redis-clinagent -d redis:7
+docker start redis-clinagent
 
 """
 

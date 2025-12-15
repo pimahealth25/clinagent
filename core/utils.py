@@ -1,7 +1,7 @@
 import hashlib
 import time
 from typing import Optional, Any, Dict
-
+from core.tasks import get_cached_chunk_summary
 
 def generate_job_id(query: str, timestamp: Optional[str] = None) -> str:
     """
@@ -27,3 +27,4 @@ def calculate_chunk_progress_percentage(job_info: Dict[str, Any]):
         progress_pct = (job_info.get("chunks_completed", 0) /
                         job_info["total_chunks"]) * 100
     return progress_pct
+

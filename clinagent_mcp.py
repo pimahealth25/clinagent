@@ -6,8 +6,8 @@ import json
 from core.clinicaltrials import run_full_studies, run_study_fields
 from core.preprocessor import resolve_field_set, shrink_trials, normalize_field_names, load_studies_from_csv
 from core.tasks import orchestrate_task
-from core.cache import (get_cached_summary, get_cached_raw, set_cached_raw,
-                        set_cached_summary, clear_all_caches, get_job_status, get_final_summary, set_job_status, redis_client)
+from core.cache import (_make_key, get_cached_summary, get_cached_raw, set_cached_raw,
+                        set_cached_summary, clear_all_caches, get_job_status, get_final_summary, set_job_status, get_all_chunks_summary)
 from core.llm import summarize_studies_json
 from core.utils import generate_job_id, calculate_chunk_progress_percentage
 
@@ -154,7 +154,6 @@ def ask():
     args = json.loads(tool_call.function.arguments)
 
     search_expr = args.get("search_expr", "")
-    job_mode = args.get("job_mode", "inline")
     max_studies = args.get("max_studies", 10)
 
     print(f"[ASK] Function: {func_name}")
@@ -164,8 +163,11 @@ def ask():
     field_names = resolve_field_set(args.get("fields", "essential"))
 
     # ===== STAGE 3: CHECK CACHE FOR SUMMARY =====
-    cached_summary = get_cached_summary(
-        search_expr, field_names or [], _GENERAL_OPENAI_MODEL)
+    job_id =_make_key("query", search_expr, json.dumps(
+        sorted(field_names)) or [], _GENERAL_OPENAI_MODEL )
+    print(f"[ASK] Generated job_id: {job_id}")
+
+    cached_summary = get_cached_summary(job_id=job_id)
 
     if cached_summary:
         print("[ASK] ✓ CACHE HIT: summary found")
@@ -176,7 +178,7 @@ def ask():
         })
 
     # ===== STAGE 4: CHECK CACHE FOR RAW RESULTS =====
-    cached_raw = get_cached_raw(search_expr, max_studies, field_names or [])
+    cached_raw = get_cached_raw(job_id, max_studies)
 
     if cached_raw:
         print(
@@ -198,9 +200,8 @@ def ask():
             else:
                 return jsonify({"error": f"Unknown function: {func_name}"}), 400
 
-            # Cache the raw results
-            set_cached_raw(search_expr, max_studies,
-                           field_names or [], result, ttl=600)
+            # Cache the raw results and return the hashed key
+            set_cached_raw(job_id,max_studies, result)
             print(f"[ASK] ✓ Fetched {len(result)} studies and cached")
         except Exception as e:
             print(f"[ASK] ✗ Fetch failed: {e}")
@@ -221,7 +222,6 @@ def ask():
 
     field_names = ['NCTId', 'BriefTitle', 'OverallStatus',
                    'Condition', 'Phase', 'StudyType', 'StartDate']
-    job_mode = "inline"
     search_expr = "Breast Cancer AND NOT Chemotherapy"
     '''
 
@@ -234,17 +234,16 @@ def ask():
         f"[ASK] ✓ Normalized {len(result)} studies, shrunk to {len(result_shrunken)} with requested fields")
 
     # ===== STAGE 7: DECIDE INLINE VS BACKGROUND =====
-    if job_mode == "background" or len(result) > 5:
+    if len(result) > 5:
+        pages = (len(result_shrunken) + _CHUNK_SIZE - 1) // _CHUNK_SIZE
+
         # Enqueue background job and return job_id
         print(f"[ASK] Enqueueing chunked pipeline job...")
-        job_id = generate_job_id(search_expr)
         try:
-
             job = orchestrate_task(
                 job_id=job_id,
                 query=search_expr,
                 studies=result_shrunken,
-                field_names=field_names or [],
                 chunk_size=_CHUNK_SIZE,
                 model_chunk=_CHUNK_SUMMARIZER_OPENAI_MODEL,
                 model_aggregate=_GENERAL_OPENAI_MODEL
@@ -254,50 +253,45 @@ def ask():
                 job_id=job_id,
                 status="processing",
                 chunk_completed=0,
-                total_chunks=(len(result_shrunken) +
-                              _CHUNK_SIZE - 1) // _CHUNK_SIZE
+                total_chunks=pages
             )
 
             print(f"[ASK] ✓ Job  {job_id} enqueued: an status initialized...")
             return jsonify({
                 "status": "processing",
                 "job_id": job_id,
+                "pages":pages,
+                "message": f"Summarizing {len(result)} studies in background..."
+
             })
         except Exception as e:
             print(
                 f"[ASK] ✗ Failed to enqueue job: {e}. Falling back to inline.")
-            job_mode = "inline"
 
-    # ===== STAGE 8: INLINE SUMMARIZATION (if mode = "inline") =====
-    if job_mode == "inline":
-        print(f"[ASK]  Inline summarization (small dataset)...")
-        try:
-            summary = summarize_studies_json(
-                query=search_expr,
-                studies=result_shrunken,
-                model=_GENERAL_OPENAI_MODEL,
-            )
+    # ===== STAGE 8: INLINE SUMMARIZATION =====
+    print(f"[ASK]  Inline summarization (small dataset)...")
+    try:
+        summary = summarize_studies_json(
+            query=search_expr,
+            studies=result_shrunken,
+            model=_GENERAL_OPENAI_MODEL,
+        )
 
-            set_cached_summary(search_expr, field_names or [],
-                               _GENERAL_OPENAI_MODEL, summary)
-            print(
-                f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
+        set_cached_summary(job_id, summary)
+    
+        print(
+            f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
 
-            return jsonify({
-                "response": summary,
-                "raw_data": result,
-                "num_studies": len(result),
-                "mode": "inline"
+        return jsonify({
+            "response": summary,
+            "raw_data": result,
+            "num_studies": len(result),
+            "message": "Summarization completed."
             })
-        except Exception as e:
-            print(f"[ASK] ✗ Summarization failed: {e}")
-            summary = f"Could not summarize: {str(e)}"
-            return jsonify({"error": f"Summarization failed: {str(e)}"}), 500
-
-    return jsonify({
-        "response": summary,
-        "raw_data": result
-    })
+    except Exception as e:
+        print(f"[ASK] ✗ Summarization failed: {e}")
+        summary = f"Could not summarize: {str(e)}"
+        return jsonify({"error": f"Summarization failed: {str(e)}"}), 500
 
 
 @app.get("/app_status")
@@ -378,6 +372,18 @@ def job_status():
     }
 
     return jsonify(response)
+
+
+@app.get("/all_chunk/<job_id>/<int:pages>")
+def all_chunks(job_id:str,pages:int):
+
+    chunks = get_all_chunks_summary(job_id,pages)
+
+    if chunks is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({"job_id": job_id, "chunks": chunks})
+
 
 
 @app.get("/final_summary")
