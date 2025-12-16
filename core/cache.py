@@ -165,7 +165,7 @@ def set_cached_raw(
     if redis_client:
         try:
             redis_client.set(key, json.dumps(data), ex=ttl)
-            return True
+            return key
         except Exception as e:
             print(f"⚠️  Redis set error: {e}")
 
@@ -184,7 +184,7 @@ def get_cached_summary(
         try:
             data = redis_client.get(key)
             if data:
-                return data
+                return json.loads(data)
         except Exception as e:
             print(f"⚠️  Redis get error: {e}")
 
@@ -334,7 +334,7 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
     if redis_client:
         data = redis_client.get(key)
         if data:
-            return json.loads(data)
+            return json.loads(data) if data else None
 
     cached = _memory_cache.get(key)
     return cached if isinstance(cached, dict) else None
@@ -370,31 +370,3 @@ def get_final_summary(job_id: str) -> Optional[str]:
     cached = _memory_cache.get(final_key)
     return cached if isinstance(cached, dict) else None
 
-
-"""
-   try:
-        result =
-
-        if result.state == "PENDING":
-            return {"status": "processing"}
-        elif result.state == "SUCCESS":
-            return {
-                "status": "done",
-                "result": result.result
-            }
-        elif result.state == "FAILURE":
-            return {
-                "status": "error",
-                "error": str(result.info)
-            }
-        elif result.state == "PROGRESS":
-            return {
-                "status": "processing",
-                "progress": result.info
-            }
-        else:
-            return {"status": result.state}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
-"""

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from openai import OpenAI
 from dotenv import load_dotenv
+from datetime import datetime, timezone
 import os
 import json
 from core.clinicaltrials import run_full_studies, run_study_fields
@@ -9,7 +10,7 @@ from core.tasks import orchestrate_task
 from core.cache import (_make_key, get_cached_summary, get_cached_raw, set_cached_raw,
                         set_cached_summary, clear_all_caches, get_job_status, get_final_summary, set_job_status, get_all_chunks_summary)
 from core.llm import summarize_studies_json
-from core.utils import generate_job_id, calculate_chunk_progress_percentage
+from core.utils import calculate_chunk_progress_percentage
 
 
 load_dotenv()
@@ -172,9 +173,13 @@ def ask():
     if cached_summary:
         print("[ASK] ✓ CACHE HIT: summary found")
         return jsonify({
-            "response": cached_summary,
+            "job_id": job_id,
+            "status": "done",
+            "summary": cached_summary,
             "from_cache": True,
-            "cache_type": "summary"
+            "cache_type": "summary",
+            "message": "Summarization completed.",
+            "updated_at": str(datetime.now(timezone.utc))
         })
 
     # ===== STAGE 4: CHECK CACHE FOR RAW RESULTS =====
@@ -281,17 +286,23 @@ def ask():
     
         print(
             f"[ASK] ✓ Summary generated and cached {str(summary)[:100]}...")
-
+        
         return jsonify({
-            "response": summary,
+            "job_id": job_id,
+            "status": "done",
+            "summary": summary,
             "raw_data": result,
-            "num_studies": len(result),
-            "message": "Summarization completed."
+            "total_studies": len(result),
+            "message": "Summarization completed.",
+            "updated_at": str(datetime.now(timezone.utc))
+
             })
     except Exception as e:
         print(f"[ASK] ✗ Summarization failed: {e}")
         summary = f"Could not summarize: {str(e)}"
-        return jsonify({"error": f"Summarization failed: {str(e)}"}), 500
+        return jsonify({
+            "status": "error",
+            "message": f"Summarization failed: {str(e)}"}), 500
 
 
 @app.get("/app_status")
@@ -365,7 +376,7 @@ def job_status():
     response = {
         "job_id": job_id,
         "status": job_info.get("status"),
-        "chunks_completed": job_info.get("chunks_completed", 0),
+        "chunk_completed": job_info.get("chunk_completed", 0),
         "total_chunks": job_info.get("total_chunks", 0),
         "progress_pct": round(progress_pct, 1),
         "updated_at": job_info.get("updated_at")
@@ -398,7 +409,7 @@ def final_summary():
     if not summary:
         return jsonify({"error": "Summary not found"}), 404
 
-    return jsonify({"job_id": job_id, "summary": summary})
+    return jsonify(summary)
 
 
 @app.get("/cache_inspect")

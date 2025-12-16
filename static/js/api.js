@@ -68,6 +68,24 @@ const API = {
     return response.json();
   },
 
+  //http://127.0.0.1:5000/job_status?job_id=query:729204d47061f731
+  async getMessageStatus(queryId) {
+    const response = await fetch(
+      Config.getApiUrl(`/job_status?job_id=${queryId}`)
+    );
+    if (!response.ok) throw new Error("Failed to get message status");
+    return response.json();
+  },
+
+  //http://127.0.0.1:5000/final_summary?job_id=query:729204d47061f731
+  async getFinalSummary(queryId) {
+    const response = await fetch(
+      Config.getApiUrl(`/final_summary?job_id=${queryId}`)
+    );
+    if (!response.ok) throw new Error("Failed to get final summary");
+    return response.json();
+  },
+
   async getUserPreferences() {
     const response = await fetch(Config.getApiUrl("/preferences"));
     if (!response.ok) throw new Error("Failed to get preferences");

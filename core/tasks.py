@@ -22,7 +22,7 @@ load_dotenv()
 logger = logging.getLogger("celery.task")
 
 try:
-    from celery import Celery, group, chain, chord
+    from celery import Celery, group, chord
     CELERY_AVAILABLE = True
 except ImportError:
     CELERY_AVAILABLE = False
@@ -57,37 +57,6 @@ if CELERY_AVAILABLE:
         print(f"⚠️  Celery broker connection failed: {e}")
         print("   Async tasks disabled. Install Redis for async support.")
         celery_app = None
-
-
-# ===== FALLBACK: SYNCHRONOUS SUMMARIZATION =====
-
-def _summarize_sync(
-    query: str,
-    studies: List[Dict],
-    fields: List[str],
-    model: str = "gpt-3.5-turbo"
-) -> Dict[str, Any]:
-    """Synchronous fallback summarization (used if Celery unavailable)."""
-    print(f"[Sync] Summarizing {len(studies)} studies synchronously...")
-
-    try:
-        from core.llm import summarize_studies_json
-        from core.cache import set_cached_summary
-
-        final_summary = summarize_studies_json(
-            query=query,
-            studies=studies,
-            model=model,
-            max_tokens=800
-        )
-
-        # Cache result
-        set_cached_summary(query, fields, model, final_summary, ttl=1800)
-
-        return {"status": "done", "summary": final_summary}
-    except Exception as e:
-        print(f"[Sync] ✗ Summarization failed: {e}")
-        return {"status": "error", "error": str(e)}
 
 
 # ===== CELERY TASK =====
@@ -285,75 +254,5 @@ if CELERY_AVAILABLE and celery_app:
         return job_id
 
 else:
-    # Celery not available; create a dummy task
-    def summarize_incrementally(
-        query: str,
-        studies: List[Dict],
-        fields: List[str],
-        model: str = "gpt-3.5-turbo"
-    ) -> Dict[str, Any]:
-        """Synchronous fallback (Celery not available)."""
-        return _summarize_sync(query, studies, fields, model)
-
-    class DummyAsyncResult:
-        """Simulate Celery AsyncResult when Celery unavailable."""
-
-        def __init__(self, job_id):
-            self.job_id = job_id
-            self.state = "FAILURE"
-            self.info = "Celery not configured"
-
-    # Mock the task.delay() method
-    summarize_incrementally.delay = lambda *args, **kwargs: DummyAsyncResult(
-        None)
-    summarize_incrementally.AsyncResult = lambda job_id: DummyAsyncResult(
-        job_id)
-
-
-# ===== UTILITY FUNCTIONS =====
-
-def submit_summarization_job(
-    query: str,
-    studies: List[Dict],
-    fields: List[str],
-    model: str = "gpt-3.5-turbo"
-) -> Dict[str, Any]:
-    """
-    Submit a summarization job (async if Celery available, sync otherwise).
-
-    Args:
-        query: search expression
-        studies: list of study dicts
-        fields: field names
-        model: LLM model
-
-    Returns:
-        dict with job_id (async) or status (sync)
-    """
-
-    if CELERY_AVAILABLE and celery_app:
-        try:
-            job = summarize_incrementally.delay(
-                query=query,
-                studies=studies,
-                fields=fields,
-                model=model
-            )
-            return {
-                "status": "submitted",
-                "job_id": str(job.id),
-                "mode": "async"
-            }
-        except Exception as e:
-            print(
-                f"[Submit] ✗ Failed to submit async job: {e}. Falling back to sync.")
-
-    # Fallback to synchronous
-    print(f"[Submit] Using synchronous summarization (Celery unavailable)...")
-    result = _summarize_sync(query, studies, fields, model)
-    return {
-        "status": result.get("status"),
-        "summary": result.get("summary"),
-        "mode": "sync",
-        "error": result.get("error")
-    }
+    def orchestrate_task(*args, **kwargs):
+        raise RuntimeError("Celery is not available. Async tasks are disabled.")

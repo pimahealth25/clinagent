@@ -24,7 +24,7 @@ def calculate_chunk_progress_percentage(job_info: Dict[str, Any]):
 
     progress_pct = 0
     if job_info.get("total_chunks", 0) > 0:
-        progress_pct = (job_info.get("chunks_completed", 0) /
+        progress_pct = (job_info.get("chunk_completed", 0) /
                         job_info["total_chunks"]) * 100
     return progress_pct
 

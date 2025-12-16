@@ -58,13 +58,52 @@ const ChatComponent = {
         );
         console.log("Assistant Response Data:", responseData);
 
+        if (responseData.status === "processing") {
+          const resMessage =
+            responseData.message || "No response from assistant.";
+          //stream the message to the user
+          updateMessageRoleAndFetchingStatus("assistant", true, resMessage);
+          render();
+
+          const finalStatus = await this.poolJobStatus(
+            responseData.job_id,
+            60,
+            5000
+          );
+
+          if (finalStatus.status === "done") {
+            console.log(
+              `Processing job with ID: ${responseData.job_id}: ${JSON.stringify(
+                responseData
+              )}`
+            );
+
+            const finalSummary = await API.getFinalSummary(responseData.job_id);
+            console.log(
+              `Processing job with ID: ${finalSummary.job_id}: ${JSON.stringify(
+                finalSummary
+              )}`
+            );
+
+            if (finalSummary.status !== "done") {
+              throw new Error(
+                `${finalSummary.status} ${finalSummary?.message}`
+              );
+            }
+            responseData.summary = finalSummary.summary;
+          } else {
+            throw new Error("Error in handleSendMessage:", error);
+          }
+        }
+
         this.stopSearchIndicator();
         updateMessageRoleAndFetchingStatus("assistant", false);
+
         render();
 
         await simulateStreaming(
           currentStreamingMessageId,
-          responseData.response || this.generateResponse(content)
+          responseData.summary || this.generateResponse(content)
         );
       } catch (error) {
         console.error("Error sending message:", error);
@@ -77,13 +116,19 @@ const ChatComponent = {
       }
     };
 
-    const updateMessageRoleAndFetchingStatus = (role, fetchStatus) => {
+    const updateMessageRoleAndFetchingStatus = (
+      role,
+      fetchStatus,
+      message = null
+    ) => {
       const messageIndex = messages.findIndex(
         (m) => m.id === currentStreamingMessageId
       );
       if (messageIndex !== -1) {
         messages[messageIndex].role = role; // Switch role to show content
         messages[messageIndex].metadata.is_fetching = fetchStatus;
+        messages[messageIndex].content =
+          message || messages[messageIndex].content;
       }
     };
 
@@ -102,9 +147,7 @@ const ChatComponent = {
           updateMessageDisplay(messageId, accumulated.trim());
         }
 
-        await new Promise((resolve) =>
-          setTimeout(resolve, 30 + Math.random() * 30)
-        );
+        this.sleep(30 + Math.random() * 30);
       }
 
       if (isStreaming) {
@@ -119,6 +162,7 @@ const ChatComponent = {
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
+        scrollToBottom();
       }
     };
 
@@ -364,9 +408,11 @@ const ChatComponent = {
   statusMessages: [
     "Searching database",
     "Fetching clinical trials",
+    "Extracting interventions and phase",
     "Filtering studies",
+    "Analyzing trial objective",
     "Analyzing results",
-    "Summarizing findings",
+    "Preparing final summary",
   ],
 
   startSearchIndicator(currentMessageId) {
@@ -502,5 +548,37 @@ Is there anything specific you'd like me to elaborate on?`;
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       }, 2000);
     });
+  },
+
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  },
+
+  async poolJobStatus(jobId, maxRetries = 60, interval = 2000) {
+    let attempts = 0;
+
+    while (attempts < maxRetries) {
+      attempts++;
+      try {
+        const finalStatus = await API.getMessageStatus(jobId);
+        console.log(`status: ${JSON.stringify(finalStatus)}`);
+
+        if (finalStatus.status === "done") {
+          return finalStatus;
+        }
+        if (finalStatus.status === "error" || finalStatus.status === "error") {
+          throw new Error(
+            `${finalStatus.status}: message:${finalStatus?.message}` ||
+              "job failed"
+          );
+        }
+      } catch (err) {
+        console.error("polling error:", err);
+        throw err;
+      }
+
+      await this.sleep(interval);
+    }
+    throw new Error("pooling timed out");
   },
 };
