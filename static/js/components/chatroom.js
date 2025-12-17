@@ -6,11 +6,11 @@ const ChatComponent = {
     let messages = [];
     let isStreaming = false;
     let currentStreamingMessageId = null;
+    let messageDuringPooling = null;
 
     const loadMessages = async () => {
       try {
         // // const data = await API.getMessages(conversation.id);
-        // messages = data.messages || [];
         messages = conversation.messages || [];
         render();
         scrollToBottom();
@@ -59,11 +59,14 @@ const ChatComponent = {
         console.log("Assistant Response Data:", responseData);
 
         if (responseData.status === "processing") {
-          const resMessage =
+          messageDuringPooling =
             responseData.message || "No response from assistant.";
+          console.log("Response Message for Processing:", messageDuringPooling);
           //stream the message to the user
-          updateMessageRoleAndFetchingStatus("assistant", true, resMessage);
+          // updateMessageRoleAndFetchingStatus("assistant", true, resMessage);
+
           render();
+          scrollToBottom();
 
           const finalStatus = await this.poolJobStatus(
             responseData.job_id,
@@ -82,7 +85,7 @@ const ChatComponent = {
             console.log(
               `Processing job with ID: ${finalSummary.job_id}: ${JSON.stringify(
                 finalSummary
-              )}`
+              ).slice(0, 200)}`
             );
 
             if (finalSummary.status !== "done") {
@@ -148,11 +151,13 @@ const ChatComponent = {
         }
 
         this.sleep(30 + Math.random() * 30);
+        scrollToBottom();
       }
 
       if (isStreaming) {
         isStreaming = false;
         currentStreamingMessageId = null;
+        scrollToBottom();
         render();
       }
     };
@@ -219,7 +224,7 @@ const ChatComponent = {
             !isUser && isFetching
               ? `<div id="search-status-${message.id}" class="search-status">
                 <span id="search-text-${message.id}">
-                  Searching
+                  ${messageDuringPooling || "Searching"}
                 </span>
                 <span id="search-dots-${message.id}"></span>
               </div>`
@@ -265,9 +270,23 @@ const ChatComponent = {
             messages.length === 0
               ? `
             <div class="welcome-message">
-              <h1>How can I help you today?</h1>
-              <p>Ask me anything - I can help with coding, research, analysis, and more.</p>
-            </div>
+          <h1>What would you like to research today?</h1>
+          <p>
+            I help you explore and summarize clinical trials from ClinicalTrials.gov —
+            fast, clear, and research-focused.
+          </p>
+
+          <ul class="examples">
+            <li>Are there breast cancer trials without chemotherapy?</li>
+            <li>Recruiting melanoma trials in the U.S.</li>
+            <li>Phase 2 diabetes studies starting in 2024</li>
+            <li>Observational cancer studies in Japan</li>
+          </ul>
+
+          <small>
+            Research use only • Not medical advice
+          </small>
+          </div>
           `
               : ""
           }
