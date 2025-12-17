@@ -460,73 +460,63 @@ const ChatComponent = {
 
   generateResponse(userMessage) {
     const lowerMessage = userMessage.toLowerCase();
+    const now = new Date().toLocaleString();
 
-    if (lowerMessage.includes("tool") || lowerMessage.includes("api")) {
-      return `I'll help you with that. Let me use the appropriate tools to gather the information you need.
+    // TOOL / DATA-DRIVEN QUERIES (Clinical trials, APIs, searches)
+    if (
+      lowerMessage.includes("trial") ||
+      lowerMessage.includes("study") ||
+      lowerMessage.includes("research") ||
+      lowerMessage.includes("api") ||
+      lowerMessage.includes("tool")
+    ) {
+      return `
+      🔎 **Search in progress**
 
-      **Tool Call: run_study_fields**
-      - search: "${userMessage}"
-      - max_studies: 20
-      - Processing...
+      Your request is being processed using our clinical trials search tools.
 
-      Based on the tool results, I found several relevant entries. Here's a summary:
+      - **Query:** "${userMessage}"
+      - **Status:** Fetching and summarizing studies
+      - **Started:** ${now}
 
-      1. **First Result**: This shows promising data with a success rate of 78%
-      2. **Second Result**: Additional findings support the initial hypothesis
-      3. **Third Result**: Further analysis reveals interesting patterns
+      This may take a few moments, especially if multiple studies are found.
+      You’ll see results appear shortly.
 
-      The data suggests a strong correlation between the variables we examined. Would you like me to dive deeper into any specific aspect?`;
+      ⏳ Please hold on…
+      `;
     }
 
+    // CODE-RELATED QUESTIONS (fallback, not actual solution)
     if (
       lowerMessage.includes("code") ||
       lowerMessage.includes("python") ||
       lowerMessage.includes("javascript")
     ) {
-      return `Here's a solution using best practices:
+      return `
+      💻 **Preparing a code-focused response**
 
-\`\`\`python
-def process_data(items):
-    """
-    Process a list of items and return filtered results
-    """
-    result = []
-    for item in items:
-        if item.is_valid():
-            result.append(item.transform())
-    return result
+      I’m analyzing your question and preparing a clear, best-practice explanation.
 
-result = process_data(my_items)
-print(f"Processed {len(result)} items")
-\`\`\`
+      - **Requested topic:** "${userMessage}"
+      - **Status:** Drafting response
+      - **Time:** ${now}
 
-This code:
-- Uses clear function naming
-- Includes documentation
-- Handles validation
-- Returns processed results
-
-Would you like me to explain any part in more detail?`;
+      You’ll receive a complete and accurate answer shortly.
+      `;
     }
 
-    return `That's a great question! Let me provide you with a comprehensive answer.
+    // GENERAL FALLBACK
+    return `
+    💬 **Working on your request**
 
-## Key Points
+    I’m processing your question to provide the most accurate response.
 
-Here's what you need to know:
+    - **Request:** "${userMessage}"
+    - **Status:** In progress
+    - **Time:** ${now}
 
-1. **First Aspect**: This is fundamental to understanding the concept
-2. **Second Aspect**: Building on the first point, we can see that...
-3. **Third Aspect**: Finally, this ties everything together
-
-> **Note**: This is particularly important in modern applications
-
-You can also consider these **alternatives**:
-- Option A: Simpler but less flexible
-- Option B: More robust with better performance
-- Option C: Best for scalability
-
-Is there anything specific you'd like me to elaborate on?`;
+    Please wait a moment…
+    `;
   },
 
   escapeHtml(text) {
