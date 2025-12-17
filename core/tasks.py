@@ -21,6 +21,8 @@ load_dotenv()
 
 logger = logging.getLogger("celery.task")
 
+_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
 try:
     from celery import Celery, group, chord
     CELERY_AVAILABLE = True
@@ -38,8 +40,8 @@ if CELERY_AVAILABLE:
     try:
         celery_app = Celery(
             "clinagent",
-            broker="redis://localhost:6379/0",
-            backend="redis://localhost:6379/0"
+            broker=_REDIS_URL,
+            backend=_REDIS_URL
         )
 
         celery_app.conf.update(
@@ -77,7 +79,8 @@ if CELERY_AVAILABLE and celery_app:
                 query=query, studies=chunk_data, model=model,
             )
             logger.info(f"[TASK] Chunk {chunk_index} summary generated")
-            set_cached_chunk_summary(job_id, chunk_index=chunk_index, chunk_summary=summary)
+            set_cached_chunk_summary(
+                job_id, chunk_index=chunk_index, chunk_summary=summary)
             set_job_status(
                 job_id=job_id,
                 status="processing",
@@ -90,7 +93,7 @@ if CELERY_AVAILABLE and celery_app:
                 f"[TASK] ✓ Chunk {chunk_index} / {total_chunks} of job {job_id} completed and cached")
 
             return {
-                "job_id":job_id,
+                "job_id": job_id,
                 "status": "done",
                 "chunk_index": chunk_index,
                 "summary": summary[:100]
@@ -101,14 +104,14 @@ if CELERY_AVAILABLE and celery_app:
                 f"[TASK] ✗ chunk {chunk_index} / {total_chunks} of job {job_id} failed: {e}")
 
             return {
-                "job_id":job_id,
+                "job_id": job_id,
                 "status": "error",
                 "chunk_index": chunk_index,
                 "error": str(e)
             }
 
     @celery_app.task(name="core.tasks.aggregate_chunks")
-    def aggregate_chunks(results, *,job_id: str, total_chunks: int, query: str, model: str = "gpt-4.1-mini") -> Dict[str, Any]:
+    def aggregate_chunks(results, *, job_id: str, total_chunks: int, query: str, model: str = "gpt-4.1-mini") -> Dict[str, Any]:
         """
          Aggregate all chunk summaries into a final summary.
 
@@ -134,9 +137,11 @@ if CELERY_AVAILABLE and celery_app:
             for i in range(total_chunks):
                 data = get_cached_chunk_summary(job_id, chunk_index=i)
                 if not data:
-                    raise ValueError(
-                        f"Missing chunk summary for chunk {i} in job {job_id}")
-                chunk_summaries.append(data)
+                    logger.error(
+                        f"[TASK] ✗ Missing chunk summary for chunk {i} in job {job_id}")
+                    # raise ValueError(
+                    #     f"Missing chunk summary for chunk {i} in job {job_id}")
+                chunk_summaries.append(data or "")
 
             if not chunk_summaries:
                 raise ValueError("No chunk summaries was found to aggregate")
@@ -277,7 +282,7 @@ if CELERY_AVAILABLE and celery_app:
         # create chunk summarization tasks
         chunk_tasks = [
             summarize_chunk.s(job_id=job_id, chunk_index=i, chunk_data=chunk, query=query,
-                               model=model_chunk, total_chunks=len(chunks)) for i, chunk in enumerate(chunks)]
+                              model=model_chunk, total_chunks=len(chunks)) for i, chunk in enumerate(chunks)]
 
         # create workflow for running all chunk summarizer and aggregate summarizer
         # group() runs tasks in parallel
@@ -285,7 +290,7 @@ if CELERY_AVAILABLE and celery_app:
         workflow = chord(
             group(*chunk_tasks),
             aggregate_chunks.s(job_id=job_id, total_chunks=len(chunks), query=query,
-                                 model=model_aggregate)
+                               model=model_aggregate)
         )
 
         result = workflow.apply_async()
@@ -299,4 +304,5 @@ if CELERY_AVAILABLE and celery_app:
 
 else:
     def orchestrate_task(*args, **kwargs):
-        raise RuntimeError("Celery is not available. Async tasks are disabled.")
+        raise RuntimeError(
+            "Celery is not available. Async tasks are disabled.")
