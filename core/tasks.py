@@ -78,9 +78,21 @@ if CELERY_AVAILABLE and celery_app:
             summary = summarize_studies_json(
                 query=query, studies=chunk_data, model=model,
             )
+
+            if summary is None:
+                logger.warning("Received empty summary from LLM")
+                return {
+                    "job_id": job_id,
+                    "status": "empty",
+                    "chunk_index": chunk_index,
+                    "message": "Empty summary from LLM"
+                }
+
             logger.info(f"[TASK] Chunk {chunk_index} summary generated")
+
             set_cached_chunk_summary(
                 job_id, chunk_index=chunk_index, chunk_summary=summary)
+
             set_job_status(
                 job_id=job_id,
                 status="processing",
@@ -90,7 +102,7 @@ if CELERY_AVAILABLE and celery_app:
             )
 
             logger.info(
-                f"[TASK] ✓ Chunk {chunk_index} / {total_chunks} of job {job_id} completed and cached")
+                f"[TASK] ✓ Chunk {chunk_index} / {total_chunks} of job {job_id} completed and cached content {summary[:50]}")
 
             return {
                 "job_id": job_id,
@@ -144,7 +156,9 @@ if CELERY_AVAILABLE and celery_app:
                 chunk_summaries.append(data or "")
 
             if not chunk_summaries:
-                raise ValueError("No chunk summaries was found to aggregate")
+                logger.error(
+                    f"[TASK] ✗ No chunk summaries found for aggregation in job {job_id}")
+                # raise ValueError("No chunk summaries was found to aggregate")
 
             final_sys_prompt = """
            You are a clinical research summary aggregator.

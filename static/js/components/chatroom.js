@@ -6,7 +6,7 @@ const ChatComponent = {
     let messages = [];
     let isStreaming = false;
     let currentStreamingMessageId = null;
-    let messageDuringPooling = null;
+    let processingMessage = null;
 
     const loadMessages = async () => {
       try {
@@ -56,21 +56,23 @@ const ChatComponent = {
           conversation.id,
           userMessage
         );
-        console.log("Assistant Response Data:", responseData);
+        console.log(
+          "Assistant Response Data:",
+          String(responseData).slice(0, 100)
+        );
 
         if (responseData.status === "processing") {
-          messageDuringPooling =
-            responseData.message || "No response from assistant.";
-          console.log("Response Message for Processing:", messageDuringPooling);
-          //stream the message to the user
-          // updateMessageRoleAndFetchingStatus("assistant", true, resMessage);
-
+          processingMessage = this.generateProcessingMessage(
+            content,
+            responseData.message
+          );
+          console.log("Response Message for Processing:", processingMessage);
           render();
           scrollToBottom();
 
           const finalStatus = await this.poolJobStatus(
             responseData.job_id,
-            60,
+            40,
             5000
           );
 
@@ -111,6 +113,7 @@ const ChatComponent = {
       } catch (error) {
         console.error("Error sending message:", error);
         alert(`[ChatRoom Error]`);
+        processingMessage = "No response from assistant.";
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
@@ -151,14 +154,14 @@ const ChatComponent = {
         }
 
         this.sleep(30 + Math.random() * 30);
-        scrollToBottom();
       }
 
       if (isStreaming) {
         isStreaming = false;
         currentStreamingMessageId = null;
-        scrollToBottom();
         render();
+
+        scrollToBottom();
       }
     };
 
@@ -167,7 +170,6 @@ const ChatComponent = {
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
-        scrollToBottom();
       }
     };
 
@@ -224,7 +226,7 @@ const ChatComponent = {
             !isUser && isFetching
               ? `<div id="search-status-${message.id}" class="search-status">
                 <span id="search-text-${message.id}">
-                  ${messageDuringPooling || "Searching"}
+                  ${MarkdownParser.parse(processingMessage) || "Searching"}
                 </span>
                 <span id="search-dots-${message.id}"></span>
               </div>`
@@ -477,6 +479,21 @@ const ChatComponent = {
     }
   },
 
+  generateProcessingMessage(userMessage, responseMessage) {
+    const now = new Date().toLocaleString();
+    return `
+    💬 **Working on your request**
+
+    I’m processing your question to provide the most accurate response.
+
+    - **Request:** "${userMessage}"
+    - **Status:** In progress ${responseMessage.toLowerCase()}
+    - **Time:** ${now}
+
+    Please wait a moment…
+    `;
+  },
+
   generateResponse(userMessage) {
     const lowerMessage = userMessage.toLowerCase();
     const now = new Date().toLocaleString();
@@ -505,36 +522,22 @@ const ChatComponent = {
       `;
     }
 
-    // CODE-RELATED QUESTIONS (fallback, not actual solution)
-    if (
-      lowerMessage.includes("code") ||
-      lowerMessage.includes("python") ||
-      lowerMessage.includes("javascript")
-    ) {
-      return `
-      💻 **Preparing a code-focused response**
-
-      I’m analyzing your question and preparing a clear, best-practice explanation.
-
-      - **Requested topic:** "${userMessage}"
-      - **Status:** Drafting response
-      - **Time:** ${now}
-
-      You’ll receive a complete and accurate answer shortly.
-      `;
-    }
-
     // GENERAL FALLBACK
     return `
-    💬 **Working on your request**
+    ⚠️ **No matching results found**
 
-    I’m processing your question to provide the most accurate response.
+    My apologies your request didn't return any matching data.
 
-    - **Request:** "${userMessage}"
-    - **Status:** In progress
-    - **Time:** ${now}
+    - **Query:** "${userMessage}"
+    - **Status:** No results available
+    - **Checked:** ${now}
 
-    Please wait a moment…
+    👉 You may want to:
+    - Rephrase your question
+    - Use more general keywords
+    - Try a different approach or topic
+
+    I'm happy to help you refine your request.
     `;
   },
 
@@ -563,7 +566,7 @@ const ChatComponent = {
     return new Promise((resolve) => setTimeout(resolve, ms));
   },
 
-  async poolJobStatus(jobId, maxRetries = 60, interval = 2000) {
+  async poolJobStatus(jobId, maxRetries = 40, interval = 2000) {
     let attempts = 0;
 
     while (attempts < maxRetries) {
