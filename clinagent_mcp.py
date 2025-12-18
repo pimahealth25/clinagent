@@ -20,6 +20,44 @@ _GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
 client = OpenAI(api_key=_OPENAI_API_KEY) if _OPENAI_API_KEY else None
 _CHUNK_SIZE = int(os.getenv("CHUNK_SIZE")) or 5
+_NO_CHUNK_AI_PROMPT = _CHUNK_MODEL_PROMPT = ("""
+You are a clinical research  summarizer.
+
+You are given a clinical trial records.
+
+──────────────── OUTPUT RULES ────────────────
+• Format: Markdown only
+• Facts only — never infer or hallucinate
+• Omit missing or empty fields
+
+──────────────── TRIAL FORMAT ────────────────
+Include a trial ONLY if at least one meaningful field exists.
+
+For each trial, include ONLY available fields:
+• **NCTId**  
+  Format: NCTId (link format: [NCTxxxxx](https://clinicaltrials.gov/study/NCTxxxxx))\n"
+• **Title**
+• **Condition(s)**
+• **Phase**
+• **Study Type**
+• **Interventions**
+• **Overall Status**
+• **Start Date**
+
+──────────────── FORMATTING ────────────────
+• Use bullet points
+• Max 4–6 lines per trial
+• Bold Phase, Status, Interventions
+• No emojis, no commentary
+
+──────────────── EDGE CASES ────────────────
+• Empty content → return: “No studies in this page.”
+
+──────────────── INPUT ────────────────
+Below is the content of trial data to summarize.
+
+""")
+
 
 
 # clear_all_caches()
@@ -279,6 +317,7 @@ def ask():
             query=search_expr,
             studies=result_shrunken,
             model=_GENERAL_OPENAI_MODEL,
+            system_prompt=_NO_CHUNK_AI_PROMPT
         )
 
         set_cached_summary(job_id, summary)
@@ -314,48 +353,6 @@ def ask():
 @app.get("/app_status")
 def status():
     return jsonify({"status": "active!!!"})
-
-
-# @app.get("/all_job_status")
-# def all_jobs_status():
-#     """
-#     Poll for background job status.
-
-#     GET /status?job_id=<job_id>
-
-#     Returns:
-#         {
-#             "status": "processing" | "done" | "error",
-#             "result": <summary_string>,  # only if done
-#             "error": <error_message>,    # only if error
-#             "chunks_processed": <int>    # only if done
-#         }
-#     """
-#     from core.tasks import summarize_incrementally
-
-#     job_id = request.args.get("job_id")
-#     if not job_id:
-#         return jsonify({"error": "Missing job_id parameter"}), 400
-
-#     try:
-#         result = summarize_incrementally.AsyncResult(job_id)
-
-#         if result.state == "PENDING":
-#             return jsonify({"status": "processing"})
-#         elif result.state == "SUCCESS":
-#             return jsonify({
-#                 "status": "done",
-#                 "result": result.result
-#             })
-#         elif result.state == "FAILURE":
-#             return jsonify({
-#                 "status": "error",
-#                 "error": str(result.info)
-#             })
-#         else:
-#             return jsonify({"status": result.state})
-#     except Exception as e:
-#         return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @app.get("/job_status")

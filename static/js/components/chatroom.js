@@ -66,7 +66,6 @@ const ChatComponent = {
             content,
             responseData.message
           );
-          console.log("Response Message for Processing:", processingMessage);
           render();
           scrollToBottom();
 
@@ -82,8 +81,8 @@ const ChatComponent = {
                 responseData
               )}`
             );
-
             const finalSummary = await API.getFinalSummary(responseData.job_id);
+
             console.log(
               `Processing job with ID: ${finalSummary.job_id}: ${JSON.stringify(
                 finalSummary
@@ -153,7 +152,7 @@ const ChatComponent = {
           updateMessageDisplay(messageId, accumulated.trim());
         }
 
-        this.sleep(30 + Math.random() * 30);
+        await this.sleep(30 + Math.random() * 30);
       }
 
       if (isStreaming) {

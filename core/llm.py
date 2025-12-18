@@ -16,7 +16,7 @@ _client = OpenAI(api_key=_API_KEY) if _API_KEY else None
 _CHUNK_SUMMARIZER_OPENAI_MODEL = os.getenv(
     "CHUNK_SUMMARIZER_MODEL") or "gpt-3.5-turbo"
 _GENERAL_OPENAI_MODEL = os.getenv("FINAL_SUMMARIZER_MODEL") or "gpt-4.1-mini"
-_SYSTEM_PROMPT = ("""
+_CHUNK_MODEL_PROMPT = ("""
 You are a clinical research chunk summarizer.
 
 You are given a PARTIAL SET of clinical trial records (a chunk).
@@ -68,7 +68,7 @@ def summarize_studies_json(
     studies: List[Dict[str, Any]],
     model: str = "gpt-4.1-mini",
     max_tokens: int = 500,
-    system_prompt: str = _SYSTEM_PROMPT
+    system_prompt: str = _CHUNK_MODEL_PROMPT
 ) -> str:
     """
     Summarize studies using JSON input instead of raw markdown.
