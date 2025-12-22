@@ -280,7 +280,7 @@ const ChatComponent = {
           <ul class="examples">
             <li>Are there breast cancer trials without chemotherapy?</li>
             <li>Recruiting melanoma trials in the U.S.</li>
-            <li>Phase 2 diabetes studies starting in 2024</li>
+            <li>Phase 2 diabetes studies</li>
             <li>Observational cancer studies in Japan</li>
           </ul>
 
