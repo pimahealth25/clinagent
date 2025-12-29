@@ -86,6 +86,16 @@ const API = {
     return response.json();
   },
 
+  // http://127.0.0.1:5000/chunk_page/query:a6565ddab537dc81?page=1
+  async getChunkPage(queryId, page = 1) {
+    const response = await fetch(
+      Config.getApiUrl(`/chunk_page/${queryId}?page=${page}`)
+    );
+    if (!response.ok)
+      throw new Error(`Failed to get chunk ${page} for ${queryId}`);
+    return response.json();
+  },
+
   async getUserPreferences() {
     const response = await fetch(Config.getApiUrl("/preferences"));
     if (!response.ok) throw new Error("Failed to get preferences");

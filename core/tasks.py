@@ -95,10 +95,8 @@ if CELERY_AVAILABLE and celery_app:
 
             set_job_status(
                 job_id=job_id,
-                status="processing",
-                chunk_completed=chunk_index+1,
+                chunk_index=chunk_index,
                 total_chunks=total_chunks,
-                summary=summary
             )
 
             logger.info(
@@ -106,7 +104,7 @@ if CELERY_AVAILABLE and celery_app:
 
             return {
                 "job_id": job_id,
-                "status": "done",
+                "status": "processing",
                 "chunk_index": chunk_index,
                 "summary": summary[:100]
             }
@@ -119,7 +117,7 @@ if CELERY_AVAILABLE and celery_app:
                 "job_id": job_id,
                 "status": "error",
                 "chunk_index": chunk_index,
-                "error": str(e)
+                "total_chunks": total_chunks,
             }
 
     @celery_app.task(name="core.tasks.aggregate_chunks")
@@ -146,14 +144,13 @@ if CELERY_AVAILABLE and celery_app:
             f"[TASK] Aggregating {total_chunks} chunks for job {job_id}...")
         try:
             chunk_summaries = []
-            for i in range(total_chunks):
+            for i in range(1, total_chunks+1):
                 data = get_cached_chunk_summary(job_id, chunk_index=i)
                 if not data:
                     logger.error(
                         f"[TASK] ✗ Missing chunk summary for chunk {i} in job {job_id}")
-                    # raise ValueError(
-                    #     f"Missing chunk summary for chunk {i} in job {job_id}")
-                chunk_summaries.append(data or "")
+
+                chunk_summaries.append(data)
 
             if not chunk_summaries:
                 logger.error(
@@ -224,14 +221,19 @@ if CELERY_AVAILABLE and celery_app:
                 query=query, studies=chunk_summaries, model=model, system_prompt=final_sys_prompt)
 
             set_cached_summary(job_id, summary=final_summary)
+
+            # set_cached_chunk_summary(
+            #     job_id, chunk_index=total_chunks, chunk_summary=final_summary)
+
+            # the last summary is the aggregated one
             set_job_status(
                 job_id=job_id,
                 status="done",
-                chunk_completed=total_chunks,
+                chunk_index=total_chunks,  # it won't be used because status is done
                 total_chunks=total_chunks,
-                summary=final_summary,
             )
-            logger.info(f"[TASK] ✓ Aggregation complete for job {job_id}")
+            logger.info(
+                f"[TASK] ✓ Aggregation complete for job {job_id} the total chunks {total_chunks}   ")
             print(f"[TASK] Final Summary: {final_summary[:200]}...")
 
             return {
@@ -246,9 +248,8 @@ if CELERY_AVAILABLE and celery_app:
             set_job_status(
                 job_id=job_id,
                 status="error",
-                chunk_completed=total_chunks,
+                chunk_index=total_chunks,
                 total_chunks=total_chunks,
-                summary=final_summary,
             )
 
             return {
@@ -296,7 +297,7 @@ if CELERY_AVAILABLE and celery_app:
         # create chunk summarization tasks
         chunk_tasks = [
             summarize_chunk.s(job_id=job_id, chunk_index=i, chunk_data=chunk, query=query,
-                              model=model_chunk, total_chunks=len(chunks)) for i, chunk in enumerate(chunks)]
+                              model=model_chunk, total_chunks=len(chunks)) for i, chunk in enumerate(chunks, 1)]
 
         # create workflow for running all chunk summarizer and aggregate summarizer
         # group() runs tasks in parallel

@@ -11,7 +11,7 @@ import json
 import time
 from datetime import datetime, timezone
 import hashlib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 # Try to import Redis; gracefully degrade if unavailable
 try:
@@ -204,7 +204,7 @@ def set_cached_summary(
     # Try Redis first
     if redis_client:
         try:
-            redis_client.set(key, summary, ex=ttl)
+            redis_client.set(key, json.dumps(summary), ex=ttl)
             return True
         except Exception as e:
             print(f"⚠️  Redis set error: {e}")
@@ -226,7 +226,7 @@ def set_cached_chunk_summary(
     # Try Redis first
     if redis_client:
         try:
-            redis_client.set(key, chunk_summary, ex=ttl)
+            redis_client.set(key, json.dumps(chunk_summary), ex=ttl)
             return True
         except Exception as e:
             print(f"⚠️  Redis set error: {e}")
@@ -248,7 +248,7 @@ def get_cached_chunk_summary(
         try:
             data = redis_client.get(key)
             if data:
-                return data
+                return json.loads(data)
         except Exception as e:
             print(f"⚠️  Redis get error: {e}")
 
@@ -265,6 +265,13 @@ def get_all_chunks_summary(job_id: str, pages: int):
         if chunk:
             chunks.append(chunk)
     return chunks
+
+
+def get_chunk_summary(job_id: str, page: int):
+    chunk = get_cached_chunk_summary(job_id, page)
+    if chunk:
+        return chunk
+    return None
 
 # ===== LEGACY COMPATIBILITY FUNCTIONS =====
 
@@ -342,18 +349,64 @@ def get_job_status(job_id: str) -> Dict[str, Any]:
     return cached if isinstance(cached, dict) else None
 
 
-def set_job_status(job_id: str, status: str, chunk_completed: int = 0,
-                   total_chunks: int = 0, summary: Optional[str] = None, ttl: int = 3600) -> bool:
-    """Store jon stats in cache"""
+def get_or_create_job_status(job_id: str, total_chunks: int) -> Dict[str, Any]:
+    """ Retrieve or create job status in cache/memory"""
     key = _make_key(job_id, "job_status")
+    data = None
+    if redis_client:
+        data = redis_client.get(key)
+        if data:
+            return json.loads(data)
+    cached = _memory_cache.get(key)
+    if cached and isinstance(cached, dict):
+        return cached
+
+    # Create new status
     status_data = {
         "job_id": job_id,
-        "status": status,
-        "chunk_completed": chunk_completed,
+        "status": "processing",
         "total_chunks": total_chunks,
-        "summary": summary,
+        "completed_chunks": [],
         "updated_at": str(datetime.now(timezone.utc))
     }
+    if redis_client:
+        redis_client.set(key, json.dumps(status_data), ex=3600)
+    else:
+        _memory_cache.set(key, json.dumps(status_data), ttl_seconds=3600)
+    return status_data
+
+
+def set_job_status(job_id: str, chunk_index: int = 0, status: str = "processing",
+                   total_chunks: int = 0, ttl: int = 3600) -> bool:
+    """
+    Update job status safely.
+    Rules:
+    - 'created' → job exists, no chunks
+    - 'processing' → running, no chunks added
+    - 'chunk_done' → add completed chunk
+    - 'done' → all chunks finished
+    - 'error' → terminal error
+    """
+    status_data = get_or_create_job_status(job_id, total_chunks)
+
+    if status == "error":
+        status_data["status"] = "error"
+    elif status == "created":
+        status_data["status"] = "created"
+    elif status == "done":
+        status_data["status"] = "done"
+    elif status == "processing":
+        completed: Set[int] = set(status_data.get("completed_chunks", []))
+        completed.add(chunk_index)
+
+        status_data["completed_chunks"] = list(completed)
+        status_data["status"] = "processing"
+    else:
+        return False  # Invalid status
+
+    status_data["updated_at"] = str(datetime.now(timezone.utc))
+    key = _make_key(job_id, "job_status")
+    print(f"setting cache for {chunk_index}/ {total_chunks}")
 
     if redis_client:
         redis_client.set(key, json.dumps(status_data), ex=ttl)
@@ -365,9 +418,10 @@ def set_job_status(job_id: str, status: str, chunk_completed: int = 0,
 
 def get_final_summary(job_id: str) -> Optional[str]:
     """ Retrieve final aggregated summary from cache"""
-    final_key = _make_key(job_id, "job_status")
+    final_key = _make_key(job_id, "final_summary")
     if redis_client:
         data = redis_client.get(final_key)
+        print("RAW DATA:", repr(data))
         return json.loads(data) if data else None
     cached = _memory_cache.get(final_key)
     return cached if isinstance(cached, dict) else None

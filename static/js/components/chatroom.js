@@ -6,12 +6,12 @@ const ChatComponent = {
     let messages = [];
     let isStreaming = false;
     let currentStreamingMessageId = null;
-    let processingMessage = null;
 
     const loadMessages = async () => {
       try {
         // // const data = await API.getMessages(conversation.id);
-        messages = conversation.messages || [];
+        // messages = conversation.messages || [];
+        messages = messageStore.getAllMessages() || [];
         render();
         scrollToBottom();
       } catch (error) {
@@ -23,16 +23,17 @@ const ChatComponent = {
       if (!content.trim() || isStreaming) return;
 
       try {
-        // const userMessage = await API.sendMessage(conversation.id, content);
         const userMessage = {
           id: Date.now().toString(),
           role: "user",
           content: content,
-          is_streaming: false,
+          isStreaming: false,
           conversation_id: conversation.id,
         };
 
-        messages.push(userMessage);
+        messageStore.addMessage(userMessage);
+        console.log("User Message:", messages);
+        console.log("User Message:", messages.length);
         render();
         scrollToBottom();
 
@@ -40,79 +41,121 @@ const ChatComponent = {
           id: Date.now().toString(),
           role: "system",
           content: "",
-          is_streaming: true,
+          isStreaming: true,
           conversation_id: conversation.id,
-          metadata: { is_fetching: true },
-        };
+          // pagination
+          pages: 0,
+          currentPage: 1,
 
-        messages.push(assistantMessage);
+          // chunk cache
+          chunks: {},
+
+          // job info
+          jobId: null,
+          originalPrompt: content,
+          metadata: { isFetching: true },
+          processingMessage: null,
+        };
+        // console.log("Assistant Message:", assistantMessage);
+
+        // messages.push(assistantMessage);
+        messageStore.addMessage(assistantMessage);
         currentStreamingMessageId = assistantMessage.id;
         isStreaming = true;
         render();
         this.startSearchIndicator(currentStreamingMessageId);
         scrollToBottom();
 
+        // messageIndex = this.getMessageIndex(
+        //   currentStreamingMessageId,
+        //   messages
+        // );
+
+        // if (messageIndex === -1) {
+        //   throw new Error("Streaming message not found");
+        // }
+        // const msg = messages[messageIndex];
+        const msg = messageStore.getMessage(currentStreamingMessageId);
+        console.log("Streaming Messages:", msg);
         const responseData = await API.getAssistantResponse(
           conversation.id,
           userMessage
         );
+        console.log("processing id:", responseData.job_id);
+
+        msg.jobId = responseData.job_id;
+
         console.log(
           "Assistant Response Data:",
-          String(responseData).slice(0, 100)
+          JSON.stringify(responseData).slice(0, 100)
         );
 
-        if (responseData.status === "processing") {
-          processingMessage = this.generateProcessingMessage(
+        if (responseData.status === "done") {
+          // for small response that can be done in one go
+          msg.content = responseData.summary || this.generateResponse(content);
+          console.log("Final Message Content:", msg.content);
+          msg.isStreaming = false;
+          msg.metadata.isFetching = false;
+          isStreaming = false;
+          currentStreamingMessageId = null;
+          this.stopSearchIndicator();
+          render();
+          scrollToBottom();
+          return;
+        }
+
+        if (responseData.status === "created") {
+          msg.processingMessage = this.generateProcessingMessage(
             content,
             responseData.message
           );
+          console.log("Processing Message:", msg.processingMessage);
           render();
           scrollToBottom();
 
-          const finalStatus = await this.poolJobStatus(
-            responseData.job_id,
-            40,
-            5000
-          );
-
-          if (finalStatus.status === "done") {
-            console.log(
-              `Processing job with ID: ${responseData.job_id}: ${JSON.stringify(
-                responseData
-              )}`
-            );
-            const finalSummary = await API.getFinalSummary(responseData.job_id);
-
-            console.log(
-              `Processing job with ID: ${finalSummary.job_id}: ${JSON.stringify(
-                finalSummary
-              ).slice(0, 200)}`
-            );
-
-            if (finalSummary.status !== "done") {
-              throw new Error(
-                `${finalSummary.status} ${finalSummary?.message}`
-              );
-            }
-            responseData.summary = finalSummary.summary;
-          } else {
-            throw new Error("Error in handleSendMessage:", error);
-          }
+          // this make sure at least 1 of the job is available
+          // msg.pages = await this.checkChunkStatus(msg.jobId, 40, 500).chunk_completed;
+          // console.log(
+          //   `Pages available for job ${msg.jobId}: responseData.total_chunks`
+          // );
+          await pollForPages(msg.id, msg.jobId);
         }
 
-        this.stopSearchIndicator();
-        updateMessageRoleAndFetchingStatus("assistant", false);
+        /* 
+      
+        // fetch data for the first page
 
+        // const firstChunk = await this.handleChunkPage(
+        //   msg.jobId,
+        //   msg.currentPage,
+        //   msg.originalPrompt
+        // );
+
+        // msg.chunks[msg.currentPage] = firstChunk;
+        // msg.content = firstChunk;
+        // render();
+        // scrollToBottom();
+
+        //poll after some page has been completed return data with link to the next chunk until it get for all the chunks
+
+        // updateMessageRoleAndFetchingStatus("assistant", false);
+        // isStreaming = false;
         render();
+        scrollToBottom();
+        msg.isStreaming = false;
+        isStreaming = false;
 
-        await simulateStreaming(
-          currentStreamingMessageId,
-          responseData.summary || this.generateResponse(content)
-        );
+        // await simulateStreaming(
+        //   currentStreamingMessageId,
+        //   msg.content || this.generateResponse(content)
+        // );
+      */
+
+        console.log(`message : ${JSON.stringify(msg).slice(0, 100)}`);
       } catch (error) {
         console.error("Error sending message:", error);
         alert(`[ChatRoom Error]`);
-        processingMessage = "No response from assistant.";
+        msg.processingMessage = "No response from assistant.";
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
@@ -131,7 +174,7 @@ const ChatComponent = {
       );
       if (messageIndex !== -1) {
         messages[messageIndex].role = role; // Switch role to show content
-        messages[messageIndex].metadata.is_fetching = fetchStatus;
+        messages[messageIndex].metadata.isFetching = fetchStatus;
         messages[messageIndex].content =
           message || messages[messageIndex].content;
       }
@@ -159,7 +202,6 @@ const ChatComponent = {
         isStreaming = false;
         currentStreamingMessageId = null;
         render();
-
         scrollToBottom();
       }
     };
@@ -181,6 +223,90 @@ const ChatComponent = {
       }
     };
 
+    /**
+     * Poll for available pages for a given message/job at intervals
+     * and set the pages count of the current message
+     * @param {string} messageId
+     * @param {string} jobId
+     */
+    const pollForPages = async (messageId, jobId) => {
+      let lastPages = 0;
+
+      const interval = setInterval(async () => {
+        try {
+          const response = await this.checkChunkStatus(jobId, 40, 500);
+          const pagesAvailable = response.completed_chunks.length;
+
+          // const idx = this.getMessageIndex(messageId, messages);
+
+          if (response.status === "done" || response.status === "error") {
+            clearInterval(interval);
+            return;
+          }
+
+          const msg = messageStore.getMessage(messageId);
+          if (pagesAvailable > lastPages) {
+            msg.pages = pagesAvailable;
+            lastPages = pagesAvailable;
+
+            // 🔥 FIRST PAGE ARRIVED
+            if (msg.currentPage === 1 && !msg.chunks[1]) {
+              await loadPage(messageId, response.completed_chunks[0]);
+            }
+            render(); // enables Next button immediately
+          }
+        } catch (error) {
+          console.error("Polling error:", error);
+          clearInterval(interval);
+          throw error;
+        }
+      }, 1500);
+    };
+
+    const loadPage = async (messageId, page) => {
+      console.log(`Loading page ${page} for message ID: ${messageId}`);
+      // const idx = this.getMessageIndex(messageId, messages);
+      // if (idx === -1) return;
+
+      // const msg = messages[idx];
+      const msg = messageStore.getMessage(messageId);
+      console.log(`loadpage page number: ${page}, msg.pages: ${msg.pages}`);
+      if (page < 1 || page > msg.pages) return;
+
+      // Cached → instant
+      if (msg.chunks[page]) {
+        msg.currentPage = page;
+        msg.content = msg.chunks[page];
+        render();
+        scrollToBottom();
+        return;
+      }
+
+      // Fetch new chunk
+      msg.metadata.isFetching = true;
+
+      const chunk = await this.handleChunkPage(
+        msg.jobId,
+        page,
+        msg.originalPrompt
+      );
+
+      msg.chunks[page] = chunk;
+      msg.currentPage = page;
+      msg.content = chunk;
+      console.log(
+        `Loaded page ${page} for message: ${JSON.stringify(msg).slice(0, 100)}`
+      );
+      msg.isStreaming = false;
+      msg.metadata.isFetching = false;
+      isStreaming = false;
+      currentStreamingMessageId = null;
+      this.stopSearchIndicator();
+      render();
+      scrollToBottom();
+      return;
+    };
+
     const scrollToBottom = () => {
       setTimeout(() => {
         const messagesContainer = chatView.querySelector(".messages-container");
@@ -194,7 +320,7 @@ const ChatComponent = {
       const isUser = message.role === "user";
       const isSystem =
         message.role === "system" || message.role === "assistant";
-      const isFetching = message.metadata?.is_fetching;
+      const isFetching = message.metadata?.isFetching;
 
       if (message.metadata && message.metadata.tool_call) {
         return this.renderToolCallMessage(message);
@@ -225,17 +351,42 @@ const ChatComponent = {
             !isUser && isFetching
               ? `<div id="search-status-${message.id}" class="search-status">
                 <span id="search-text-${message.id}">
-                  ${MarkdownParser.parse(processingMessage) || "Searching"}
+                  ${
+                    MarkdownParser.parse(message.processingMessage) ||
+                    "Searching"
+                  }
                 </span>
                 <span id="search-dots-${message.id}"></span>
               </div>`
               : `<div class="message-content" id="content-${message.id}">
                 ${MarkdownParser.parse(message.content)}
+
+                ${
+                  message.pages >= 1 && message.content
+                    ? `
+                <div class="pagination-controls">
+                  <button class="pagination-btn" onclick="PaginationComponent.loadPreviousPage('${
+                    message.id
+                  }')" ${message.currentPage <= 1 ? "disabled" : ""}>
+                    ⬅ Previous
+                  </button>
+                  <span>Page ${message.currentPage} of ${message.pages}</span>
+                  <button class="pagination-btn" onclick="PaginationComponent.loadNextPage('${
+                    message.id
+                  }')" ${
+                        message.currentPage >= message.pages ? "disabled" : ""
+                      }>
+                   Next ➡
+                  </button>
+                </div>
+              `
+                    : ""
+                }
               </div>`
           }
             
             ${
-              !isUser && !message.is_streaming && !isFetching
+              !isUser && !message.isStreaming && !isFetching
                 ? `
               <div class="message-actions">
                 <button class="action-btn" title="Copy" onclick="ChatComponent.copyMessage(this)">
@@ -254,6 +405,7 @@ const ChatComponent = {
     };
 
     const render = () => {
+      messages = messageStore.getAllMessages() || [];
       chatView.innerHTML = `
         <div class="chat-header">
           <button class="mobile-menu-btn" id="mobile-menu-btn">
@@ -346,13 +498,11 @@ const ChatComponent = {
           </svg>
         </button>
       `;
-
       const input = chatView.querySelector("#message-input");
       const sendBtn = chatView.querySelector("#send-btn");
       const stopBtn = chatView.querySelector("#stop-btn");
       const scrollBtn = chatView.querySelector("#scroll-to-bottom");
       const mobileMenuBtn = chatView.querySelector("#mobile-menu-btn");
-
       input.addEventListener("input", () => {
         input.style.height = "auto";
         input.style.height = Math.min(input.scrollHeight, 200) + "px";
@@ -379,7 +529,6 @@ const ChatComponent = {
 
       if (scrollBtn) {
         scrollBtn.addEventListener("click", scrollToBottom);
-
         const messagesContainer = chatView.querySelector("#messages-container");
         messagesContainer.addEventListener("scroll", () => {
           const isNearBottom =
@@ -476,6 +625,23 @@ const ChatComponent = {
     if (statusEl) {
       statusEl.classList.add("hidden");
     }
+  },
+
+  generateEmptyChunkMessage(userMessage, currentPage) {
+    const now = new Date().toLocaleString();
+
+    return `
+    💬 **Nothing to show on this page**
+
+    This part of your request didn’t return any results, but processing is continuing.
+
+    - **Request:** "${userMessage}"
+    - **Page:** ${currentPage}
+    - **Status:** Completed (no content)
+    - **Time:** ${now}
+
+    ➡️ Please move to the next page to continue.
+    `;
   },
 
   generateProcessingMessage(userMessage, responseMessage) {
@@ -577,7 +743,7 @@ const ChatComponent = {
         if (finalStatus.status === "done") {
           return finalStatus;
         }
-        if (finalStatus.status === "error" || finalStatus.status === "error") {
+        if (finalStatus.status === "error") {
           throw new Error(
             `${finalStatus.status}: message:${finalStatus?.message}` ||
               "job failed"
@@ -591,5 +757,51 @@ const ChatComponent = {
       await this.sleep(interval);
     }
     throw new Error("pooling timed out");
+  },
+
+  async checkChunkStatus(jobId, maxRetries = 40, interval = 2000) {
+    let attempts = 0;
+    while (attempts < maxRetries) {
+      attempts++;
+      try {
+        response = await API.getMessageStatus(jobId);
+        console.log(`check some job status: ${JSON.stringify(response)}`);
+
+        if (response.status === "error") {
+          throw new Error(
+            `${jobId} ${response.status}: message:${response?.message}` ||
+              "job failed"
+          );
+        }
+
+        if (response.completed_chunks.length > 0) {
+          return response;
+        }
+      } catch (err) {
+        console.error("some job status:", err);
+        throw err;
+      }
+      await this.sleep(interval);
+    }
+    throw new Error("Some job status timed out without any completed chunk");
+  },
+
+  async handleChunkPage(jobId, page, userMessage) {
+    try {
+      const response = await API.getChunkPage(jobId, page);
+      console.log(`chunkData: ${JSON.stringify(response).slice(0, 10)}`);
+      if (response.chunk_summary) {
+        return response.chunk_summary;
+      } else {
+        return this.generateEmptyChunkMessage(userMessage, page);
+      }
+    } catch (err) {
+      console.error("handleChunkPage error:", err);
+      throw err;
+    }
+  },
+
+  getMessageIndex(messageId, messages) {
+    return messages.findIndex((m) => m.id === messageId);
   },
 };

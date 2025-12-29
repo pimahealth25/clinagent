@@ -39,8 +39,8 @@ class App {
     }
 
     this.currentConversation = { id: 2, title: "Agentic AI", messages: [] };
-    const chatView = ChatComponent.create(this.currentConversation, this.user);
-    appContainer.appendChild(chatView);
+    const chat = ChatComponent.create(this.currentConversation, this.user);
+    appContainer.appendChild(chat);
   }
 }
 
